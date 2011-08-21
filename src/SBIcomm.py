@@ -24,13 +24,14 @@ CATEGORY = {'SPC':'0', 'STD':'1'}
 
 class SBIcomm:
     # URL
-    DOMAIN = "https://k.sbisec.co.jp/bsite"
-    pages = {'top':DOMAIN + "/visitor/top.do",
-             'search':DOMAIN + "/visitor/top.do",
-             'buy':DOMAIN + "/member/stock/buyOrderEntry.do?ipm_product_code=",
-             'sell':DOMAIN + "/member/stock/sellOrderEntry.do?ipm_product_code=",
-             'orders':DOMAIN + "/member/stock/orderList.do?cayen.comboOff=1",
-             'cancel':DOMAIN + "/member/stock/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=",
+    DOMAIN = "https://k.sbisec.co.jp"
+    STOCK_DIR = DOMAIN + "/bsite/member/stock"
+    pages = {'top':DOMAIN + "/bsite/visitor/top.do",
+             'search':DOMAIN + "/bsite/price/search.do",
+             'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=",
+             'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=",
+             'list':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1",
+             'cancel':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=",
              'inv':"&cayen.isStopOrder=true"}
 
     ENC = "cp932"
@@ -42,6 +43,7 @@ class SBIcomm:
         self.password = password
         self.br = mechanize.Browser()
         self.br.set_handle_robots(False)
+        
         self.br.set_debug_http(True)
         self.br.set_debug_redirects(True)
         self.br.set_debug_responses(True)
@@ -56,6 +58,7 @@ class SBIcomm:
         self.br["username"] = self.username
         self.br["password"] = self.password
         self.br.submit()
+
     def get_prices(self, code):
         """
         現在の日付、株価を返す
@@ -77,8 +80,9 @@ class SBIcomm:
         volume = int(re.sub(",", "", price_list[4].findAll("td", align="right")[1].contents[0].rstrip(u'株')))
         # 日付の取得
         m = re.search(r"\d{2}/\d{2}", price_list[2].findAll("td")[1].contents[1])
-        date = datetime.date(datetime.date.today().year,int(m.group(0)[0:2]), int(m.group(0)[4:6]))
+        date = datetime.date(datetime.date.today().year, int(m.group(0)[0:2]), int(m.group(0)[4:6]))
         return date, [start_price, end_price, max_price, min_price, volume]
+
     def buy_order(self, code, quantity=None, price=None, 
                   limit="today", date=None, order='LIM_UNC', comp='MORE', category='SPC'):
         """
@@ -92,6 +96,7 @@ class SBIcomm:
         self.br["hitokutei_trade_kbn"] = CATEGORY[category]
         self.br["password"] = self.password
         return self._confirm()
+
     def inv_buy_order(self, quantity=None, trigger_price=None, price=None, 
                       limit="today", date=None, order='LIM_UNC', comp='MORE', category='SPC'):
         """
@@ -106,6 +111,7 @@ class SBIcomm:
         self.br["hitokutei_trade_kbn"] = CATEGORY[category]
         self.br["password"] = self.password
         return self._confirm()
+
     def sell_order(self, code, quantity=None, price=None, 
                    limit="today", date=None, order='LIM_UNC', comp='MORE'):
         """
@@ -118,6 +124,7 @@ class SBIcomm:
         self._set_order_propaty(quantity, price, limit, date, order, comp)
         self.br["password"] = self.password
         return self._confirm()
+
     def inv_sell_order(self, code, quantity=None, trigger_price=None, price=None, 
                        limit="today", date=None, order='LIM_UNC', comp='MORE'):
         """
@@ -131,6 +138,18 @@ class SBIcomm:
         self.br["trigger_price"] = str(trigger_price)
         self.br["password"] = self.password
         return self._confirm()
+
+    def cancel_order(self, order_num):
+        """
+        注文のキャンセル
+        """
+        self.submit_user_and_pass()
+        res = self.br.open(self.pages['cancel'] + order_num)
+        set_encode(self.br, self.ENC)
+        self.br.select_form(nr=0)
+        self.br["password"] = self.password
+        self.br.submit()
+
     def _set_order_propaty(self, quantity, price, limit, date, order, comp):
         """
         オーダー時の設定を行う
@@ -142,6 +161,7 @@ class SBIcomm:
             self.br["limit"]=[date]
         self.br["sasinari_kbn"] = [ORDER[order]]
         self.br["trigger_zone"] = [COMP[comp]]
+
     def _confirm(self):
         """
         確認画面での最終処理を行う
@@ -166,13 +186,3 @@ class SBIcomm:
         except:
             print "Cannot Get Order Code"
             return None
-    def cancel_order(self, order_num):
-        """
-        注文のキャンセル
-        """
-        self.submit_user_and_pass()
-        res = self.br.open(self.pages['cancel'])
-        set_encode(self.br, self.ENC)
-        print res.read().decode(self.ENC)
-        #self.br["password"] = self.password
-        #self.br.submit()
