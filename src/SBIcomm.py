@@ -35,13 +35,17 @@ class SBIcomm:
 
     ENC = "cp932"
 
-    logger = logging.getLogger()
+    logger = logging.getLogger("mechanize")
 
     def __init__(self, username=None, password=None):
         self.username = username
         self.password = password
         self.br = mechanize.Browser()
         self.br.set_handle_robots(False)
+        self.br.set_debug_http(True)
+        self.br.set_debug_redirects(True)
+        self.br.set_debug_responses(True)
+
     def submit_user_and_pass(self):
         """
         トップページにユーザー名とパスワードを送信
