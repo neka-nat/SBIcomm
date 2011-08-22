@@ -93,11 +93,11 @@ class SBIcomm:
         set_encode(self.br, self.ENC)
         self.br.select_form(nr=0)
         self._set_order_propaty(quantity, price, limit, date, order, comp)
-        self.br["hitokutei_trade_kbn"] = CATEGORY[category]
+        self.br["hitokutei_trade_kbn"] = [CATEGORY[category]]
         self.br["password"] = self.password
         return self._confirm()
 
-    def inv_buy_order(self, quantity=None, trigger_price=None, price=None, 
+    def inv_buy_order(self, code, quantity=None, trigger_price=None, price=None, 
                       limit="today", date=None, order='LIM_UNC', comp='MORE', category='SPC'):
         """
         逆指値の買注文を行う
@@ -108,7 +108,7 @@ class SBIcomm:
         self.br.select_form(nr=0)
         self._set_order_propaty(quantity, price, limit, date, order, comp)
         self.br["trigger_price"] = str(trigger_price)
-        self.br["hitokutei_trade_kbn"] = CATEGORY[category]
+        self.br["hitokutei_trade_kbn"] = [CATEGORY[category]]
         self.br["password"] = self.password
         return self._confirm()
 
