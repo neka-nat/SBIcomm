@@ -30,7 +30,8 @@ class SBIcomm:
              'search':DOMAIN + "/bsite/price/search.do",
              'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=",
              'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=",
-             'list':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1",
+             'list':STOCK_DIR + "/orderList.do?cayen.comboOff=1",
+             'correct':STOCK_DIR + "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=",
              'cancel':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=",
              'inv':"&cayen.isStopOrder=true"}
 
@@ -138,6 +139,32 @@ class SBIcomm:
         self.br["trigger_price"] = str(trigger_price)
         self.br["password"] = self.password
         return self._confirm()
+
+    def get_order_num_list(self):
+        """
+        オーダーのリストを取得する
+        """
+        self.submit_user_and_pass()
+        res = self.br.open(self.pages['list'])
+        soup = BeautifulSoup(res.read().decode(self.ENC))
+        lists = soup.findAll("td", width="20%", align="center")
+        mlist = [re.search("\d{6}", l.findAll("a")[0]['href']) for l in lists]
+        return [m.group(0) for m in mlist]
+
+    def get_order_info(self, order_num):
+        """
+        オーダーの情報を取得する
+        """
+        self.submit_user_and_pass()
+        res = self.br.open(self.pages['correct'] + order_num)
+        soup = BeautifulSoup(res.read().decode(self.ENC))
+        l = soup.find("form", action="/bsite/member/stock/orderCorrectEntry.do", method="POST")
+        m = re.search("\d{4}", l.find("td").contents[0].contents[0])
+        code = int(m.group(0))
+        l = soup.find("form", action="/bsite/member/stock/orderCorrectConfirm.do", method="POST")
+        state = l.findAll("td")[1].contents[0]
+        n_order = int(l.findAll("td")[3].contents[0].rstrip(u"株"))
+        return {'code':code, 'number':n_order, 'state':state}
 
     def cancel_order(self, order_num):
         """
