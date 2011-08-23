@@ -85,7 +85,7 @@ class SBIcomm:
         return date, [start_price, end_price, max_price, min_price, volume]
 
     def buy_order(self, code, quantity=None, price=None, 
-                  limit="today", date=None, order='LIM_UNC', comp='MORE', category='SPC'):
+                  limit=datetime.date.today(), order='LIM_UNC', comp='MORE', category='SPC'):
         """
         買注文を行う
         """
@@ -99,7 +99,7 @@ class SBIcomm:
         return self._confirm()
 
     def inv_buy_order(self, code, quantity=None, trigger_price=None, price=None, 
-                      limit="today", date=None, order='LIM_UNC', comp='MORE', category='SPC'):
+                      limit=datetime.date.today(), order='LIM_UNC', comp='MORE', category='SPC'):
         """
         逆指値の買注文を行う
         """
@@ -114,7 +114,7 @@ class SBIcomm:
         return self._confirm()
 
     def sell_order(self, code, quantity=None, price=None, 
-                   limit="today", date=None, order='LIM_UNC', comp='MORE'):
+                   limit=datetime.date.today(), order='LIM_UNC', comp='MORE'):
         """
         売注文を行う
         """
@@ -127,7 +127,7 @@ class SBIcomm:
         return self._confirm()
 
     def inv_sell_order(self, code, quantity=None, trigger_price=None, price=None, 
-                       limit="today", date=None, order='LIM_UNC', comp='MORE'):
+                       limit=datetime.date.today(), order='LIM_UNC', comp='MORE'):
         """
         逆指値の売注文を行う
         """
@@ -157,14 +157,17 @@ class SBIcomm:
         """
         self.submit_user_and_pass()
         res = self.br.open(self.pages['correct'] + order_num)
-        soup = BeautifulSoup(res.read().decode(self.ENC))
-        l = soup.find("form", action="/bsite/member/stock/orderCorrectEntry.do", method="POST")
-        m = re.search("\d{4}", l.find("td").contents[0].contents[0])
-        code = int(m.group(0))
-        l = soup.find("form", action="/bsite/member/stock/orderCorrectConfirm.do", method="POST")
-        state = l.findAll("td")[1].contents[0]
-        n_order = int(l.findAll("td")[3].contents[0].rstrip(u"株"))
-        return {'code':code, 'number':n_order, 'state':state}
+        try:
+            soup = BeautifulSoup(res.read().decode(self.ENC))
+            l = soup.find("form", action="/bsite/member/stock/orderCorrectEntry.do", method="POST")
+            m = re.search("\d{4}", l.find("td").contents[0].contents[0])
+            code = int(m.group(0))
+            l = soup.find("form", action="/bsite/member/stock/orderCorrectConfirm.do", method="POST")
+            state = l.findAll("td")[1].contents[0]
+            n_order = int(l.findAll("td")[3].contents[0].rstrip(u"株"))
+            return {'code':code, 'number':n_order, 'state':state}
+        except:
+            raise "Cannot get info!", order_num
 
     def cancel_order(self, order_num):
         """
@@ -184,8 +187,13 @@ class SBIcomm:
         self.br["quantity"] = str(quantity)
         self.br["price"] = str(price)
         self.br["caLiKbn"] = [limit]
-        if limit == "limit":
-            self.br["limit"]=[date]
+        if limit == datetime.date.today():
+            self.br["caLiKbn"] = ["today"]
+        elif limit <= datetime.date.today() + datetime.timedelta(days=8):
+            self.br["caLiKbn"] = ["limit"]
+            self.br["limit"]=[str(limit).replace("-","/")]
+        else:
+            raise "Cannot setting 9 later day!"
         self.br["sasinari_kbn"] = [ORDER[order]]
         self.br["trigger_zone"] = [COMP[comp]]
 
@@ -203,13 +211,11 @@ class SBIcomm:
             time.sleep(2)
             res = self.br.open(req)
         except:
-            print "Cannot Order"
-            return None
+            raise "Cannot Order!"
         try:
             soup = BeautifulSoup(res.read().decode(self.ENC))
             inputs = soup.findAll("input")
             res.close()
             return inputs[0]["value"]
         except:
-            print "Cannot Get Order Code"
-            return None
+            raise "Cannot Get Order Code!"
