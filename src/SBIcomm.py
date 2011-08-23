@@ -1,12 +1,11 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
-import re, time, datetime
+import sys, re
+import time, datetime
 import mechanize
 from BeautifulSoup import BeautifulSoup
 
 import logging
-import logging.config
-logging.config.fileConfig('log.conf')
 
 def set_encode(br, enc):
     """
@@ -38,6 +37,9 @@ class SBIcomm:
     ENC = "cp932"
 
     logger = logging.getLogger("mechanize")
+    logfile = open("sbicomm.log", 'w')
+    logger.addHandler(logging.StreamHandler(logfile))
+    logger.setLevel(logging.DEBUG)
 
     def __init__(self, username=None, password=None):
         self.username = username
