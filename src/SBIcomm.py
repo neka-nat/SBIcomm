@@ -1,7 +1,7 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
 import sys, re
-import time, datetime
+import time, datetime, workdays
 import mechanize
 from BeautifulSoup import BeautifulSoup
 
@@ -21,10 +21,14 @@ ORDER = {'LIM_UNC':' ', 'LIM_YORI':'Z', 'LIM_HIKI':'I', 'LIM_HUSE':'F', 'LIM_IOC
          'MRK_UNC':'N', 'MRK_YORI':'Y', 'MRK_HIKI':'H', 'MRK_IOC':'O'}
 CATEGORY = {'SPC':'0', 'STD':'1'}
 
+# 祝日の設定
+holidays = []
+
 class SBIcomm:
     # URL
     DOMAIN = "https://k.sbisec.co.jp"
     STOCK_DIR = DOMAIN + "/bsite/member/stock"
+    ACC_DIR = DOMAIN + "/bsite/member/acc"
     pages = {'top':DOMAIN + "/bsite/visitor/top.do",
              'search':DOMAIN + "/bsite/price/search.do",
              'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=",
@@ -32,6 +36,7 @@ class SBIcomm:
              'list':STOCK_DIR + "/orderList.do?cayen.comboOff=1",
              'correct':STOCK_DIR + "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=",
              'cancel':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=",
+             'schedule':ACC_DIR + "/stockClearingScheduleList.do",
              'inv':"&cayen.isStopOrder=true"}
 
     ENC = "cp932"
@@ -87,7 +92,7 @@ class SBIcomm:
         return date, [start_price, end_price, max_price, min_price, volume]
 
     def buy_order(self, code, quantity=None, price=None, 
-                  limit=datetime.date.today(), order='LIM_UNC', comp='MORE', category='SPC'):
+                  limit=0, order='LIM_UNC', comp='MORE', category='SPC'):
         """
         買注文を行う
         """
@@ -101,7 +106,7 @@ class SBIcomm:
         return self._confirm()
 
     def inv_buy_order(self, code, quantity=None, trigger_price=None, price=None, 
-                      limit=datetime.date.today(), order='LIM_UNC', comp='MORE', category='SPC'):
+                      limit=0, order='LIM_UNC', comp='MORE', category='SPC'):
         """
         逆指値の買注文を行う
         """
@@ -116,7 +121,7 @@ class SBIcomm:
         return self._confirm()
 
     def sell_order(self, code, quantity=None, price=None, 
-                   limit=datetime.date.today(), order='LIM_UNC', comp='MORE'):
+                   limit=0, order='LIM_UNC', comp='MORE'):
         """
         売注文を行う
         """
@@ -129,7 +134,7 @@ class SBIcomm:
         return self._confirm()
 
     def inv_sell_order(self, code, quantity=None, trigger_price=None, price=None, 
-                       limit=datetime.date.today(), order='LIM_UNC', comp='MORE'):
+                       limit=0, order='LIM_UNC', comp='MORE'):
         """
         逆指値の売注文を行う
         """
@@ -171,6 +176,17 @@ class SBIcomm:
         except:
             raise "Cannot get info!", order_num
 
+    def get_purchase_margin(self, wday_step=0):
+        """
+        指定した営業日後での買付余力を取得する
+        """
+        self.submit_user_and_pass()
+        res = self.br.open(self.pages['schedule'])
+        soup = BeautifulSoup(res.read().decode(self.ENC))
+        lists = soup.findAll("tr", bgcolor="#f9f9f9")
+        r = re.compile(r'\d+')
+        return int("".join(r.findall(lists[wday_step].find("td", align="right").contents[0])))
+
     def cancel_order(self, order_num):
         """
         注文のキャンセル
@@ -189,13 +205,14 @@ class SBIcomm:
         self.br["quantity"] = str(quantity)
         self.br["price"] = str(price)
         self.br["caLiKbn"] = [limit]
-        if limit == datetime.date.today():
+        if limit == 0:
             self.br["caLiKbn"] = ["today"]
-        elif limit <= datetime.date.today() + datetime.timedelta(days=8):
+        elif limit <= 6:
             self.br["caLiKbn"] = ["limit"]
-            self.br["limit"]=[str(limit).replace("-","/")]
+            day = workdays.workday(datetime.date.today(), limit, holidays)
+            self.br["limit"]=[str(day).replace("-","/")]
         else:
-            raise "Cannot setting 9 later day!"
+            raise "Cannot setting 6 later working day!"
         self.br["sasinari_kbn"] = [ORDER[order]]
         self.br["trigger_zone"] = [COMP[comp]]
 
