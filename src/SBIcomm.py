@@ -37,6 +37,7 @@ class SBIcomm:
              'correct':STOCK_DIR + "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=",
              'cancel':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=",
              'schedule':ACC_DIR + "/stockClearingScheduleList.do",
+             'manege':ACC_DIR + "/holdStockList.do",
              'inv':"&cayen.isStopOrder=true"}
 
     ENC = "cp932"
@@ -151,9 +152,7 @@ class SBIcomm:
         """
         オーダーのリストを取得する
         """
-        self.submit_user_and_pass()
-        res = self.br.open(self.pages['list'])
-        soup = BeautifulSoup(res.read().decode(self.ENC))
+        soup = self._get_soup('list')
         lists = soup.findAll("td", width="20%", align="center")
         mlist = [re.search("\d{6}", l.findAll("a")[0]['href']) for l in lists]
         return [m.group(0) for m in mlist]
@@ -162,10 +161,8 @@ class SBIcomm:
         """
         オーダーの情報を取得する
         """
-        self.submit_user_and_pass()
-        res = self.br.open(self.pages['correct'] + order_num)
+        soup = self._get_soup('correct')
         try:
-            soup = BeautifulSoup(res.read().decode(self.ENC))
             l = soup.find("form", action="/bsite/member/stock/orderCorrectEntry.do", method="POST")
             m = re.search("\d{4}", l.find("td").contents[0].contents[0])
             code = int(m.group(0))
@@ -180,12 +177,19 @@ class SBIcomm:
         """
         指定した営業日後での買付余力を取得する
         """
-        self.submit_user_and_pass()
-        res = self.br.open(self.pages['schedule'])
-        soup = BeautifulSoup(res.read().decode(self.ENC))
+        soup = self._get_soup('schedule')
         lists = soup.findAll("tr", bgcolor="#f9f9f9")
         r = re.compile(r'\d+')
         return int("".join(r.findall(lists[wday_step].find("td", align="right").contents[0])))
+
+    def get_total_eval(self):
+        """
+        現在の評価合計を取得する
+        """
+        soup = self._get_soup('manege')
+        lists = soup.findAll("table", border="0", cellspacing="1", cellpadding="2", width="100%")
+        r = re.compile(r'\d+')
+        return int("".join(r.findall(lists[0].findAll("td")[1].contents[0])))
 
     def cancel_order(self, order_num):
         """
@@ -238,3 +242,8 @@ class SBIcomm:
             return inputs[0]["value"]
         except:
             raise "Cannot Get Order Code!"
+
+    def _get_soup(self, page_name):
+        self.submit_user_and_pass()
+        res = self.br.open(self.pages[page_name])
+        return BeautifulSoup(res.read().decode(self.ENC))
