@@ -31,14 +31,13 @@ class SBIcomm:
     ACC_DIR = DOMAIN + "/bsite/member/acc"
     pages = {'top':DOMAIN + "/bsite/visitor/top.do",
              'search':DOMAIN + "/bsite/price/search.do",
-             'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=",
-             'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=",
+             'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%d&cayen.isStopOrder=%s",
+             'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%d&cayen.isStopOrder=%s",
              'list':STOCK_DIR + "/orderList.do?cayen.comboOff=1",
-             'correct':STOCK_DIR + "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=",
-             'cancel':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=",
+             'correct':STOCK_DIR + "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=%s",
+             'cancel':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=%s",
              'schedule':ACC_DIR + "/stockClearingScheduleList.do",
-             'manege':ACC_DIR + "/holdStockList.do",
-             'inv':"&cayen.isStopOrder=true"}
+             'manege':ACC_DIR + "/holdStockList.do"}
 
     ENC = "cp932"
 
@@ -97,9 +96,7 @@ class SBIcomm:
         """
         買注文を行う
         """
-        self.submit_user_and_pass()
-        res = self.br.open(self.pages['buy']+str(code))
-        set_encode(self.br, self.ENC)
+        self._init_open(self.pages['buy'] % (code, "false"))
         self.br.select_form(nr=0)
         self._set_order_propaty(quantity, price, limit, date, order, comp)
         self.br["hitokutei_trade_kbn"] = [CATEGORY[category]]
@@ -111,9 +108,7 @@ class SBIcomm:
         """
         逆指値の買注文を行う
         """
-        self.submit_user_and_pass()
-        res = self.br.open(self.pages['buy']+str(code)+self.pages['inv'])
-        set_encode(self.br, self.ENC)
+        self._init_open(self.pages['buy'] % (code, "true"))
         self.br.select_form(nr=0)
         self._set_order_propaty(quantity, price, limit, date, order, comp)
         self.br["trigger_price"] = str(trigger_price)
@@ -126,9 +121,7 @@ class SBIcomm:
         """
         売注文を行う
         """
-        self.submit_user_and_pass()
-        res = self.br.open(self.pages['sell']+str(code))
-        set_encode(self.br, self.ENC)
+        self._init_open(self.pages['sell'] % (code, "false"))
         self.br.select_form(nr=0)
         self._set_order_propaty(quantity, price, limit, date, order, comp)
         self.br["password"] = self.password
@@ -139,9 +132,7 @@ class SBIcomm:
         """
         逆指値の売注文を行う
         """
-        self.submit_user_and_pass()
-        res = self.br.open(self.pages['sell']+str(code)+self.pages['inv'])
-        set_encode(self.br, self.ENC)
+        self._init_open(self.pages['sell'] % (code, "true"))
         self.br.select_form(nr=0)
         self._set_order_propaty(quantity, price, limit, date, order, comp)
         self.br["trigger_price"] = str(trigger_price)
@@ -152,7 +143,7 @@ class SBIcomm:
         """
         オーダーのリストを取得する
         """
-        soup = self._get_soup('list')
+        soup = self._get_soup(self.pages['list'])
         lists = soup.findAll("td", width="20%", align="center")
         mlist = [re.search("\d{6}", l.findAll("a")[0]['href']) for l in lists]
         return [m.group(0) for m in mlist]
@@ -161,7 +152,7 @@ class SBIcomm:
         """
         オーダーの情報を取得する
         """
-        soup = self._get_soup('correct')
+        soup = self._get_soup(self.pages['correct'] % order_num)
         try:
             l = soup.find("form", action="/bsite/member/stock/orderCorrectEntry.do", method="POST")
             m = re.search("\d{4}", l.find("td").contents[0].contents[0])
@@ -177,7 +168,7 @@ class SBIcomm:
         """
         指定した営業日後での買付余力を取得する
         """
-        soup = self._get_soup('schedule')
+        soup = self._get_soup(self.pages['schedule'])
         lists = soup.findAll("tr", bgcolor="#f9f9f9")
         r = re.compile(r'\d+')
         return int("".join(r.findall(lists[wday_step].find("td", align="right").contents[0])))
@@ -186,7 +177,7 @@ class SBIcomm:
         """
         現在の評価合計を取得する
         """
-        soup = self._get_soup('manege')
+        soup = self._get_soup(self.pages['manege'])
         lists = soup.findAll("table", border="0", cellspacing="1", cellpadding="2", width="100%")
         r = re.compile(r'\d+')
         return int("".join(r.findall(lists[0].findAll("td")[1].contents[0])))
@@ -195,9 +186,7 @@ class SBIcomm:
         """
         注文のキャンセル
         """
-        self.submit_user_and_pass()
-        res = self.br.open(self.pages['cancel'] + order_num)
-        set_encode(self.br, self.ENC)
+        self._init_open(self.pages['cancel'] % order_num)
         self.br.select_form(nr=0)
         self.br["password"] = self.password
         self.br.submit()
@@ -243,7 +232,18 @@ class SBIcomm:
         except:
             raise "Cannot Get Order Code!"
 
-    def _get_soup(self, page_name):
+    def _init_open(self, page):
+        """
+        ユーザのパスワードを送信してpageをオープンする
+        """
         self.submit_user_and_pass()
-        res = self.br.open(self.pages[page_name])
+        res = self.br.open(page)
+        set_encode(self.br, self.ENC)
+
+    def _get_soup(self, page):
+        """
+        指定したページをパースするパーサを取得する
+        """
+        self.submit_user_and_pass()
+        res = self.br.open(page)
         return BeautifulSoup(res.read().decode(self.ENC))
