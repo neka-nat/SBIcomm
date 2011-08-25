@@ -46,15 +46,17 @@ class SBIcomm:
     logger.addHandler(logging.StreamHandler(logfile))
     logger.setLevel(logging.DEBUG)
 
+    pat = re.compile(r'\d+')
+
     def __init__(self, username=None, password=None):
         self.username = username
         self.password = password
         self.br = mechanize.Browser()
         self.br.set_handle_robots(False)
         
-        self.br.set_debug_http(True)
-        self.br.set_debug_redirects(True)
-        self.br.set_debug_responses(True)
+        #self.br.set_debug_http(True)
+        #self.br.set_debug_redirects(True)
+        #self.br.set_debug_responses(True)
 
     def submit_user_and_pass(self):
         """
@@ -87,8 +89,8 @@ class SBIcomm:
         min_price = float(m[2].group(0))
         volume = int(re.sub(",", "", price_list[4].findAll("td", align="right")[1].contents[0].rstrip(u'株')))
         # 日付の取得
-        m = re.search(r"\d{2}/\d{2}", price_list[2].findAll("td")[1].contents[1])
-        date = datetime.date(datetime.date.today().year, int(m.group(0)[0:2]), int(m.group(0)[4:6]))
+        num_list = self.pat.findall(price_list[2].findAll("td")[1].contents[1])
+        date = datetime.date(datetime.date.today().year, int(num_list[0]), int(num_list[1]))
         return date, [start_price, end_price, max_price, min_price, volume]
 
     def buy_order(self, code, quantity=None, price=None, 
@@ -171,7 +173,7 @@ class SBIcomm:
         soup = self._get_soup(self.pages['schedule'])
         lists = soup.findAll("tr", bgcolor="#f9f9f9")
         r = re.compile(r'\d+')
-        return int("".join(r.findall(lists[wday_step].find("td", align="right").contents[0])))
+        return int("".join(self.pat.findall(lists[wday_step].find("td", align="right").contents[0])))
 
     def get_total_eval(self):
         """
@@ -179,8 +181,7 @@ class SBIcomm:
         """
         soup = self._get_soup(self.pages['manege'])
         lists = soup.findAll("table", border="0", cellspacing="1", cellpadding="2", width="100%")
-        r = re.compile(r'\d+')
-        return int("".join(r.findall(lists[0].findAll("td")[1].contents[0])))
+        return int("".join(self.pat.findall(lists[0].findAll("td")[1].contents[0])))
 
     def cancel_order(self, order_num):
         """
@@ -203,7 +204,7 @@ class SBIcomm:
         elif limit <= 6:
             self.br["caLiKbn"] = ["limit"]
             day = workdays.workday(datetime.date.today(), limit, holidays)
-            self.br["limit"]=[str(day).replace("-","/")]
+            self.br["limit"]=[day.strftime("%Y/%m/%d")]
         else:
             raise "Cannot setting 6 later working day!"
         self.br["sasinari_kbn"] = [ORDER[order]]
