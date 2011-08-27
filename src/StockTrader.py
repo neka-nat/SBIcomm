@@ -29,9 +29,9 @@ elif SIMULATOR == "True":
 
 today = datetime.date.today()
 # 取引開始時刻
-start_time = datetime.datetime.combine(today, datetime.time(9, 0, 0))
+start_time = datetime.datetime.combine(today, datetime.time(23, 40, 0))
 # 取引終了時刻
-end_time = datetime.datetime.combine(today, datetime.time(15, 0, 0))
+end_time = datetime.datetime.combine(today, datetime.time(23, 45, 0))
 
 def unix_time(d):
   """
@@ -55,9 +55,11 @@ class StockTrader(Process):
   def process(self):
     print "Start Trading...", datetime.datetime.now()
     while True:
+      trade_start = time.time()
       print datetime.datetime.now(), self.name
       self._trade()
-      yield hold, self, SAMPLING
+      trade_end = time.time()
+      yield hold, self, SAMPLING - (trade_end - trade_start)
 
 if __name__ == "__main__":
   initialize()

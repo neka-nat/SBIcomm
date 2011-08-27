@@ -24,6 +24,7 @@ CATEGORY = {'SPC':'0', 'STD':'1'}
 
 # 祝日の設定
 holidays = []
+SLEEP_TIME = 2
 
 class SBIcomm:
     # URL
@@ -58,7 +59,10 @@ class SBIcomm:
         #self.br.set_debug_http(True)
         #self.br.set_debug_redirects(True)
         #self.br.set_debug_responses(True)
-        
+
+    def __del__(self):
+        self.br.close()
+
     def submit_user_and_pass(self):
         """
         トップページにユーザー名とパスワードを送信
@@ -69,6 +73,7 @@ class SBIcomm:
         self.br["username"] = self.username
         self.br["password"] = self.password
         self.br.submit()
+        time.sleep(SLEEP_TIME)
 
     def get_prices(self, code):
         """
@@ -200,7 +205,7 @@ class SBIcomm:
         try:
             req = self.br.click(type="submit", nr=0)
             print "Submitting Order..."
-            time.sleep(2)
+            time.sleep(SLEEP_TIME)
             res = self.br.open(req)
         except:
             raise "Cannot Order!"
@@ -229,3 +234,10 @@ class SBIcomm:
         res = self.br.open(page)
         html = res.read().decode(self.ENC)
         return BeautifulSoup(html)
+
+if __name__ == "__main__":
+    sbi = SBIcomm("hogehoge", "hogehoge")
+    print sbi.buy_order(6758,100,1000, inv=True, trigger_price=999)
+    print sbi.get_prices(6758)
+    print sbi.get_purchase_margin()
+    print sbi.get_total_eval()
