@@ -55,7 +55,7 @@ class SBIcomm:
         self.password = password
         self.br = mechanize.Browser()
         self.br.set_handle_robots(False)
-        
+
         #self.br.set_debug_http(True)
         #self.br.set_debug_redirects(True)
         #self.br.set_debug_responses(True)
@@ -75,7 +75,7 @@ class SBIcomm:
         self.br.submit()
         time.sleep(SLEEP_TIME)
 
-    def get_prices(self, code):
+    def get_value(self, code):
         """
         現在の日付、株価を返す
         """
@@ -90,6 +90,7 @@ class SBIcomm:
         soup = BeautifulSoup(html)
         price_list = soup.findAll("tr", valign="top")
         end_price = float(price_list[2].find("font").contents[0])
+        gain_loss = eval(price_list[3].find("font").contents[0])
         m = [re.search(r"\d+", price_list[i].findAll("td", align="right")[0].contents[0]) for i in range(4,7)]
         start_price = float(m[0].group(0))
         max_price = float(m[1].group(0))
@@ -98,7 +99,7 @@ class SBIcomm:
         # 日付の取得
         num_list = self.pat.findall(price_list[2].findAll("td")[1].contents[1])
         date = datetime.date(datetime.date.today().year, int(num_list[0]), int(num_list[1]))
-        return date, [start_price, end_price, max_price, min_price, volume]
+        return date, [start_price, end_price, max_price, min_price, volume, gain_loss, gain_loss/(end_price-gain_loss)]
 
     def buy_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
                   comp='MORE', category='SPC', inv=False, trigger_price=None):
@@ -238,6 +239,6 @@ class SBIcomm:
 if __name__ == "__main__":
     sbi = SBIcomm("hogehoge", "hogehoge")
     print sbi.buy_order(6758,100,1000, inv=True, trigger_price=999)
-    print sbi.get_prices(6758)
+    print sbi.get_value(6758)
     print sbi.get_purchase_margin()
     print sbi.get_total_eval()
