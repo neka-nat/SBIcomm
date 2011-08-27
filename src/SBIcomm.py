@@ -6,6 +6,7 @@ import mechanize
 from BeautifulSoup import BeautifulSoup
 
 import logging
+import copy
 
 def set_encode(br, enc):
     """
@@ -57,7 +58,7 @@ class SBIcomm:
         #self.br.set_debug_http(True)
         #self.br.set_debug_redirects(True)
         #self.br.set_debug_responses(True)
-
+        
     def submit_user_and_pass(self):
         """
         トップページにユーザー名とパスワードを送信
@@ -80,64 +81,44 @@ class SBIcomm:
         self.br.submit()
         res = self.br.response()
         # 取得したhtmlを解析して日付と価格を求める
-        soup = BeautifulSoup(res.read().decode(self.ENC))
+        html = res.read().decode(self.ENC)
+        soup = BeautifulSoup(html)
         price_list = soup.findAll("tr", valign="top")
         end_price = float(price_list[2].find("font").contents[0])
         m = [re.search(r"\d+", price_list[i].findAll("td", align="right")[0].contents[0]) for i in range(4,7)]
         start_price = float(m[0].group(0))
         max_price = float(m[1].group(0))
         min_price = float(m[2].group(0))
-        volume = int(re.sub(",", "", price_list[4].findAll("td", align="right")[1].contents[0].rstrip(u'株')))
+        volume = int("".join(self.pat.findall(price_list[4].findAll("td", align="right")[1].contents[0])))
         # 日付の取得
         num_list = self.pat.findall(price_list[2].findAll("td")[1].contents[1])
         date = datetime.date(datetime.date.today().year, int(num_list[0]), int(num_list[1]))
         return date, [start_price, end_price, max_price, min_price, volume]
 
-    def buy_order(self, code, quantity=None, price=None, 
-                  limit=0, order='LIM_UNC', comp='MORE', category='SPC'):
+    def buy_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
+                  comp='MORE', category='SPC', inv=False, trigger_price=None):
         """
         買注文を行う
         """
-        self._init_open(self.pages['buy'] % (code, "false"))
+        self._init_open(self.pages['buy'] % (code, str(inv).lower()))
         self.br.select_form(nr=0)
-        self._set_order_propaty(quantity, price, limit, date, order, comp)
+        self._set_order_propaty(quantity, price, limit, order, comp)
+        if inv == True:
+            self.br["trigger_price"] = str(trigger_price)
         self.br["hitokutei_trade_kbn"] = [CATEGORY[category]]
         self.br["password"] = self.password
         return self._confirm()
 
-    def inv_buy_order(self, code, quantity=None, trigger_price=None, price=None, 
-                      limit=0, order='LIM_UNC', comp='MORE', category='SPC'):
-        """
-        逆指値の買注文を行う
-        """
-        self._init_open(self.pages['buy'] % (code, "true"))
-        self.br.select_form(nr=0)
-        self._set_order_propaty(quantity, price, limit, date, order, comp)
-        self.br["trigger_price"] = str(trigger_price)
-        self.br["hitokutei_trade_kbn"] = [CATEGORY[category]]
-        self.br["password"] = self.password
-        return self._confirm()
-
-    def sell_order(self, code, quantity=None, price=None, 
-                   limit=0, order='LIM_UNC', comp='MORE'):
+    def sell_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
+                   comp='MORE', inv=False, trigger_price=None):
         """
         売注文を行う
         """
-        self._init_open(self.pages['sell'] % (code, "false"))
+        self._init_open(self.pages['sell'] % (code, str(inv).lower()))
         self.br.select_form(nr=0)
-        self._set_order_propaty(quantity, price, limit, date, order, comp)
-        self.br["password"] = self.password
-        return self._confirm()
-
-    def inv_sell_order(self, code, quantity=None, trigger_price=None, price=None, 
-                       limit=0, order='LIM_UNC', comp='MORE'):
-        """
-        逆指値の売注文を行う
-        """
-        self._init_open(self.pages['sell'] % (code, "true"))
-        self.br.select_form(nr=0)
-        self._set_order_propaty(quantity, price, limit, date, order, comp)
-        self.br["trigger_price"] = str(trigger_price)
+        self._set_order_propaty(quantity, price, limit, order, comp)
+        if inv == True:
+            self.br["trigger_price"] = str(trigger_price)
         self.br["password"] = self.password
         return self._confirm()
 
@@ -172,7 +153,6 @@ class SBIcomm:
         """
         soup = self._get_soup(self.pages['schedule'])
         lists = soup.findAll("tr", bgcolor="#f9f9f9")
-        r = re.compile(r'\d+')
         return int("".join(self.pat.findall(lists[wday_step].find("td", align="right").contents[0])))
 
     def get_total_eval(self):
@@ -192,13 +172,12 @@ class SBIcomm:
         self.br["password"] = self.password
         self.br.submit()
 
-    def _set_order_propaty(self, quantity, price, limit, date, order, comp):
+    def _set_order_propaty(self, quantity, price, limit, order, comp):
         """
         オーダー時の設定を行う
         """
         self.br["quantity"] = str(quantity)
         self.br["price"] = str(price)
-        self.br["caLiKbn"] = [limit]
         if limit == 0:
             self.br["caLiKbn"] = ["today"]
         elif limit <= 6:
@@ -226,7 +205,8 @@ class SBIcomm:
         except:
             raise "Cannot Order!"
         try:
-            soup = BeautifulSoup(res.read().decode(self.ENC))
+            html = res.read().decode(self.ENC)
+            soup = BeautifulSoup(html)
             inputs = soup.findAll("input")
             res.close()
             return inputs[0]["value"]
@@ -247,4 +227,5 @@ class SBIcomm:
         """
         self.submit_user_and_pass()
         res = self.br.open(page)
-        return BeautifulSoup(res.read().decode(self.ENC))
+        html = res.read().decode(self.ENC)
+        return BeautifulSoup(html)

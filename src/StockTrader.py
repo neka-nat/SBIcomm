@@ -3,7 +3,15 @@
 import time, datetime
 import ConfigParser
 import SBIcomm
-from code import *
+import logging
+import logging.config
+
+logging.config.fileConfig('log.conf')
+logger = logging.getLogger("app")
+
+CODE = {'SONY':6758,
+        'TOYOTA':7203,
+        'PANA':6752}
 
 # configファイルの読み込み
 conf = ConfigParser.SafeConfigParser()
@@ -35,6 +43,10 @@ class StockTrader(Process):
   def __init__(self,name):
     Process.__init__(self,name=name)
     self.sbi = SBIcomm.SBIcomm(USERNAME, PASSWARD)
+    self._init_trade()
+
+  def _init_trade(self):
+    pass
 
   def _trade(self):
     print "Now Trading..."
