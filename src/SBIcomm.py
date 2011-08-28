@@ -17,6 +17,10 @@ def set_encode(br, enc):
     br._factory._forms_factory.encoding = enc
     br._factory._links_factory._encoding = enc
 
+pat = re.compile(r'\d+')
+def extract_num(string):
+    return "".join(pat.findall(string))
+
 COMP = {'MORE':'0', 'LESS':'1'}
 ORDER = {'LIM_UNC':' ', 'LIM_YORI':'Z', 'LIM_HIKI':'I', 'LIM_HUSE':'F', 'LIM_IOC':'P',
          'MRK_UNC':'N', 'MRK_YORI':'Y', 'MRK_HIKI':'H', 'MRK_IOC':'O'}
@@ -47,8 +51,6 @@ class SBIcomm:
     logfile = open("sbicomm.log", 'w')
     logger.addHandler(logging.StreamHandler(logfile))
     logger.setLevel(logging.DEBUG)
-
-    pat = re.compile(r'\d+')
 
     def __init__(self, username=None, password=None,
                  proxy=None, proxy_user=None, proxy_password=None):
@@ -98,15 +100,15 @@ class SBIcomm:
         html = res.read().decode(self.ENC)
         soup = BeautifulSoup(html)
         price_list = soup.findAll("tr", valign="top")
-        end_price = float("".join(self.pat.findall(price_list[2].find("font").contents[0])))
+        end_price = float(extract_num(price_list[2].find("font").contents[0]))
         gain_loss = eval(price_list[3].find("font").contents[0])
         m = [re.search(r"\d+", price_list[i].findAll("td", align="right")[0].contents[0]) for i in range(4,7)]
         start_price = float(m[0].group(0))
         max_price = float(m[1].group(0))
         min_price = float(m[2].group(0))
-        volume = int("".join(self.pat.findall(price_list[4].findAll("td", align="right")[1].contents[0])))
+        volume = int(extract_num(price_list[4].findAll("td", align="right")[1].contents[0]))
         # 日付の取得
-        num_list = self.pat.findall(price_list[2].findAll("td")[1].contents[1])
+        num_list = pat.findall(price_list[2].findAll("td")[1].contents[1])
         date = datetime.date(datetime.date.today().year, int(num_list[0]), int(num_list[1]))
         return date, [start_price, end_price, max_price, min_price, volume, gain_loss, gain_loss/(end_price-gain_loss)]
 
@@ -157,7 +159,7 @@ class SBIcomm:
             code = int(m.group(0))
             l = soup.find("form", action="/bsite/member/stock/orderCorrectConfirm.do", method="POST")
             state = l.findAll("td")[1].contents[0]
-            n_order = int(l.findAll("td")[3].contents[0].rstrip(u"株"))
+            n_order = int(extract_num(l.findAll("td")[3].contents[0]))
             return {'code':code, 'number':n_order, 'state':state}
         except:
             raise "Cannot get info!", order_num
@@ -168,7 +170,7 @@ class SBIcomm:
         """
         soup = self._get_soup(self.pages['schedule'])
         lists = soup.findAll("tr", bgcolor="#f9f9f9")
-        return int("".join(self.pat.findall(lists[wday_step].find("td", align="right").contents[0])))
+        return int(extract_num(lists[wday_step].find("td", align="right").contents[0]))
 
     def get_total_eval(self):
         """
@@ -176,7 +178,7 @@ class SBIcomm:
         """
         soup = self._get_soup(self.pages['manege'])
         lists = soup.findAll("table", border="0", cellspacing="1", cellpadding="2", width="100%")
-        return int("".join(self.pat.findall(lists[0].findAll("td")[1].contents[0])))
+        return int(extract_num(lists[0].findAll("td")[1].contents[0]))
 
     def cancel_order(self, order_num):
         """
