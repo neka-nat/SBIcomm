@@ -50,46 +50,55 @@ class SBIcomm:
 
     pat = re.compile(r'\d+')
 
-    def __init__(self, username=None, password=None):
+    def __init__(self, username=None, password=None,
+                 proxy=None, proxy_user=None, proxy_password=None):
         self.username = username
         self.password = password
-        self.br = mechanize.Browser()
-        self.br.set_handle_robots(False)
+        self.proxy          = proxy
+        self.proxy_user     = proxy_user
+        self.proxy_password = proxy_password
 
-        #self.br.set_debug_http(True)
-        #self.br.set_debug_redirects(True)
-        #self.br.set_debug_responses(True)
+    def _browser_open(self):
+        br = mechanize.Browser()
+        br.set_handle_robots(False)
+        if not self.proxy is None:
+            br.set_proxies(self.proxy)
+            br.add_proxy_password(self.proxy_user, self.proxy_password)
 
-    def __del__(self):
-        self.br.close()
+        #br.set_debug_http(True)
+        #br.set_debug_redirects(True)
+        #br.set_debug_responses(True)
+        return br
 
     def submit_user_and_pass(self):
         """
         トップページにユーザー名とパスワードを送信
         """
-        self.br.open(self.pages['top'])
-        set_encode(self.br, self.ENC)
-        self.br.select_form(name="form1")
-        self.br["username"] = self.username
-        self.br["password"] = self.password
-        self.br.submit()
-        time.sleep(SLEEP_TIME)
+        br = self._browser_open()
+        br.open(self.pages['top'])
+        set_encode(br, self.ENC)
+        br.select_form(name="form1")
+        br["username"] = self.username
+        br["password"] = self.password
+        br.submit()
+        #time.sleep(SLEEP_TIME)
+        return br
 
     def get_value(self, code):
         """
         現在の日付、株価を返す
         """
-        res = self.br.open(self.pages['search'])
-        set_encode(self.br, self.ENC)
-        self.br.select_form(nr=0)
-        self.br["ipm_product_code"] = str(code)
-        self.br.submit()
-        res = self.br.response()
+        br = self._browser_open()
+        res = br.open(self.pages['search'])
+        set_encode(br, self.ENC)
+        br.select_form(nr=0)
+        br["ipm_product_code"] = str(code)
+        res = br.submit()
         # 取得したhtmlを解析して日付と価格を求める
         html = res.read().decode(self.ENC)
         soup = BeautifulSoup(html)
         price_list = soup.findAll("tr", valign="top")
-        end_price = float(price_list[2].find("font").contents[0])
+        end_price = float("".join(self.pat.findall(price_list[2].find("font").contents[0])))
         gain_loss = eval(price_list[3].find("font").contents[0])
         m = [re.search(r"\d+", price_list[i].findAll("td", align="right")[0].contents[0]) for i in range(4,7)]
         start_price = float(m[0].group(0))
@@ -106,27 +115,27 @@ class SBIcomm:
         """
         買注文を行う
         """
-        self._init_open(self.pages['buy'] % (code, str(inv).lower()))
-        self.br.select_form(nr=0)
-        self._set_order_propaty(quantity, price, limit, order, comp)
+        br = self._init_open(self.pages['buy'] % (code, str(inv).lower()))
+        br.select_form(nr=0)
+        self._set_order_propaty(br, quantity, price, limit, order, comp)
         if inv == True:
-            self.br["trigger_price"] = str(trigger_price)
-        self.br["hitokutei_trade_kbn"] = [CATEGORY[category]]
-        self.br["password"] = self.password
-        return self._confirm()
+            br["trigger_price"] = str(trigger_price)
+        br["hitokutei_trade_kbn"] = [CATEGORY[category]]
+        br["password"] = self.password
+        return self._confirm(br)
 
     def sell_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
                    comp='MORE', inv=False, trigger_price=None):
         """
         売注文を行う
         """
-        self._init_open(self.pages['sell'] % (code, str(inv).lower()))
-        self.br.select_form(nr=0)
-        self._set_order_propaty(quantity, price, limit, order, comp)
+        br = self._init_open(self.pages['sell'] % (code, str(inv).lower()))
+        br.select_form(nr=0)
+        self._set_order_propaty(br, quantity, price, limit, order, comp)
         if inv == True:
-            self.br["trigger_price"] = str(trigger_price)
-        self.br["password"] = self.password
-        return self._confirm()
+            br["trigger_price"] = str(trigger_price)
+        br["password"] = self.password
+        return self._confirm(br)
 
     def get_order_num_list(self):
         """
@@ -173,41 +182,41 @@ class SBIcomm:
         """
         注文のキャンセル
         """
-        self._init_open(self.pages['cancel'] % order_num)
-        self.br.select_form(nr=0)
-        self.br["password"] = self.password
-        self.br.submit()
+        br = self._init_open(self.pages['cancel'] % order_num)
+        br.select_form(nr=0)
+        br["password"] = self.password
+        br.submit()
 
-    def _set_order_propaty(self, quantity, price, limit, order, comp):
+    def _set_order_propaty(self, br, quantity, price, limit, order, comp):
         """
         オーダー時の設定を行う
         """
-        self.br["quantity"] = str(quantity)
-        self.br["price"] = str(price)
+        br["quantity"] = str(quantity)
+        br["price"] = str(price)
         if limit == 0:
-            self.br["caLiKbn"] = ["today"]
+            br["caLiKbn"] = ["today"]
         elif limit <= 6:
-            self.br["caLiKbn"] = ["limit"]
+            br["caLiKbn"] = ["limit"]
             day = workdays.workday(datetime.date.today(), limit, holidays)
-            self.br["limit"]=[day.strftime("%Y/%m/%d")]
+            br["limit"]=[day.strftime("%Y/%m/%d")]
         else:
             raise "Cannot setting 6 later working day!"
-        self.br["sasinari_kbn"] = [ORDER[order]]
-        self.br["trigger_zone"] = [COMP[comp]]
+        br["sasinari_kbn"] = [ORDER[order]]
+        br["trigger_zone"] = [COMP[comp]]
 
-    def _confirm(self):
+    def _confirm(self, br):
         """
         確認画面での最終処理を行う
         """
-        req = self.br.click(type="submit", nr=1)
-        res = self.br.open(req)
-        set_encode(self.br, self.ENC)
-        self.br.select_form(nr=0)
+        req = br.click(type="submit", nr=1)
+        res = br.open(req)
+        set_encode(br, self.ENC)
+        br.select_form(nr=0)
         try:
-            req = self.br.click(type="submit", nr=0)
+            req = br.click(type="submit", nr=0)
             print "Submitting Order..."
             time.sleep(SLEEP_TIME)
-            res = self.br.open(req)
+            res = br.open(req)
         except:
             raise "Cannot Order!"
         try:
@@ -223,16 +232,17 @@ class SBIcomm:
         """
         ユーザのパスワードを送信してpageをオープンする
         """
-        self.submit_user_and_pass()
-        res = self.br.open(page)
-        set_encode(self.br, self.ENC)
+        br = self.submit_user_and_pass()
+        res = br.open(page)
+        set_encode(br, self.ENC)
+        return br
 
     def _get_soup(self, page):
         """
         指定したページをパースするパーサを取得する
         """
-        self.submit_user_and_pass()
-        res = self.br.open(page)
+        br = self.submit_user_and_pass()
+        res = br.open(page)
         html = res.read().decode(self.ENC)
         return BeautifulSoup(html)
 
