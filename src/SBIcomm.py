@@ -101,11 +101,16 @@ class SBIcomm:
         soup = BeautifulSoup(html)
         price_list = soup.findAll("tr", valign="top")
         end_price = float(extract_num(price_list[2].find("font").contents[0]))
-        gain_loss = eval(price_list[3].find("font").contents[0])
-        m = [re.search(r"\d+", price_list[i].findAll("td", align="right")[0].contents[0]) for i in range(4,7)]
-        start_price = float(m[0].group(0))
-        max_price = float(m[1].group(0))
-        min_price = float(m[2].group(0))
+        num = price_list[3].find("font")
+        if num is None:
+            gain_loss = 0.0
+        else:
+            num_str = num.contents[0]
+            gain_loss = eval(num_str[0]+"1.0")*float(extract_num(num_str))
+        m = [pat.findall(price_list[i].findAll("td", align="right")[0].contents[0].replace(",",""))[0] for i in range(4,7)]
+        start_price = float(m[0])
+        max_price = float(m[1])
+        min_price = float(m[2])
         volume = int(extract_num(price_list[4].findAll("td", align="right")[1].contents[0]))
         # 日付の取得
         num_list = pat.findall(price_list[2].findAll("td")[1].contents[1])
