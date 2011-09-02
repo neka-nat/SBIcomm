@@ -1,14 +1,16 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
 import time, datetime
-import ConfigParser
+import codecs, ConfigParser
 import SBIcomm
 from code import CODE
 import logging
 import logging.config
 
 logging.config.fileConfig('log.conf')
-logger = logging.getLogger("app")
+logger = logging.getLogger('top.mid')
+result = open("result.txt", "w")
+result = codecs.lookup('utf_8')[-1](result)
 
 # configファイルの読み込み
 conf = ConfigParser.SafeConfigParser()
@@ -40,20 +42,45 @@ class StockTrader(Process):
   def __init__(self,name):
     Process.__init__(self,name=name)
     self.sbi = SBIcomm.SBIcomm(USERNAME, PASSWARD)
-    self._init_trade()
-
-  def _init_trade(self):
-    pass
 
   def _trade(self):
-    print "Now Trading..."
-    print self.sbi.get_value(CODE['パナソニック'])
+    logger.debug("Trading Start!")
+    stock_data = self.get_sorted_stock_data()
+    logger.debug("Top Rate %d, %f", stock_data[0][0], stock_data[0][1][1])
+    logger.debug("Trading End!")
+
+  def init_process(self):
+    """
+    最初に行うプロセス
+    """
+    logger.debug("Init Process Start!")
+    stock_data = self.get_sorted_stock_data()
+    self.total_eval = self.sbi.get_total_eval()
+    self.margin = self.sbi.get_purchase_margin()
+    logger.debug("total eval, margin:%f %f" % self.total_eval, self.margin)
+
+  def get_sorted_stock_data(self):
+    """
+    株価を前日比が高い順にソートして返す
+    """
+    stock_data = {}
+    for code in CODE.values():
+      stock_data[code] = self.sbi.get_value(code)
+    return sorted(stock_data.items(), lambda x,y : cmp(x[1][1][6], y[1][1][6]))
+
+  def calc_num_purchase(self, code):
+    """
+    現在の買付余力で買える最大株数を求める(100株単位)
+    """
+    day, stock_info = self.sbi.get_value(code)
+    return int(self.margin/(stock_info[1]*100))*100
 
   def process(self):
-    print "Start Trading...", datetime.datetime.now()
+    logger.debug("Start Trading Process... ")
     while True:
       trade_start = time.time()
       print datetime.datetime.now(), self.name
+      # トレードの開始
       self._trade()
       trade_end = time.time()
       yield hold, self, SAMPLING - (trade_end - trade_start)
@@ -62,15 +89,18 @@ if __name__ == "__main__":
   initialize()
   p  = StockTrader("StockTrader")
   boot_time = datetime.datetime.now()
-  print "Program Start: ", boot_time
+  logger.debug("Program Start!")
   if boot_time > end_time:
     # 15時以降なら実行しない
-    sys.exit("Today's trade is end.")
+    logger.debug("Today's trade is end!")
+    sys.exit()
 
   span = unix_time(end_time) - unix_time(boot_time)
+  activate(p, p.init_process(), at = 0.0)
   activate(p, p.process(), at = max([unix_time(start_time) - unix_time(boot_time), 0.0]))
   if SIMULATOR == "False":
     simulate(real_time=True, rel_speed=1, until=span)
   elif SIMULATOR == "True":
     simulate(until=span)
-  print 'End Trading...', datetime.datetime.now()
+  logger.debug("End Trading...")
+  result.close()
