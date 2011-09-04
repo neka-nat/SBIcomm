@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 import time, datetime
 import codecs, ConfigParser
+import pickle
 import SBIcomm
 from code import CODE
 import logging
@@ -42,11 +43,12 @@ class StockTrader(Process):
   def __init__(self,name):
     Process.__init__(self,name=name)
     self.sbi = SBIcomm.SBIcomm(USERNAME, PASSWARD)
+    self.init_process()
 
   def _trade(self):
     logger.debug("Trading Start!")
-    stock_data = self.get_sorted_stock_data()
-    logger.debug("Top Rate %d, %f", stock_data[0][0], stock_data[0][1][1])
+    stock_data = self.get_all_stock_data()
+    pickle.dump((datetime.datetime.now(), stock_data), result)
     logger.debug("Trading End!")
 
   def init_process(self):
@@ -54,19 +56,22 @@ class StockTrader(Process):
     最初に行うプロセス
     """
     logger.debug("Init Process Start!")
-    stock_data = self.get_sorted_stock_data()
+    stock_data = self.get_all_stock_data()
     self.total_eval = self.sbi.get_total_eval()
     self.margin = self.sbi.get_purchase_margin()
-    logger.debug("total eval, margin:%f %f" % self.total_eval, self.margin)
+    logger.debug("total eval, margin:%f %f" % (self.total_eval, self.margin))
 
-  def get_sorted_stock_data(self):
+  def get_all_stock_data(self):
     """
     株価を前日比が高い順にソートして返す
     """
     stock_data = {}
     for code in CODE.values():
       stock_data[code] = self.sbi.get_value(code)
-    return sorted(stock_data.items(), lambda x,y : cmp(x[1][1][6], y[1][1][6]))
+    return stock_data
+
+  def sort_stock_data(self, data):
+    return sorted(data.items(), lambda x,y : cmp(x[1][1][6], y[1][1][6]))
 
   def calc_num_purchase(self, code):
     """
@@ -79,7 +84,6 @@ class StockTrader(Process):
     logger.debug("Start Trading Process... ")
     while True:
       trade_start = time.time()
-      print datetime.datetime.now(), self.name
       # トレードの開始
       self._trade()
       trade_end = time.time()
@@ -96,7 +100,7 @@ if __name__ == "__main__":
     sys.exit()
 
   span = unix_time(end_time) - unix_time(boot_time)
-  activate(p, p.init_process(), at = 0.0)
+  logger.debug("Wait Time %f s" % max([unix_time(start_time) - unix_time(boot_time), 0.0]))
   activate(p, p.process(), at = max([unix_time(start_time) - unix_time(boot_time), 0.0]))
   if SIMULATOR == "False":
     simulate(real_time=True, rel_speed=1, until=span)
