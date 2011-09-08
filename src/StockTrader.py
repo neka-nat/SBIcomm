@@ -67,7 +67,9 @@ class StockTrader(Process):
     """
     stock_data = {}
     for code in CODE.values():
-      stock_data[code] = self.sbi.get_value(code)
+      value = self.sbi.get_value(code)
+      if not value[0] is None:
+        stock_data[code] = value
     return stock_data
 
   def sort_stock_data(self, data):
