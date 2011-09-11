@@ -43,12 +43,13 @@ class StockTrader(Process):
   def __init__(self,name):
     Process.__init__(self,name=name)
     self.sbi = SBIcomm.SBIcomm(USERNAME, PASSWARD)
+    self.stock_all_data = []
     self.init_process()
 
   def _trade(self):
     logger.debug("Trading Start!")
     stock_data = self.get_all_stock_data()
-    pickle.dump((datetime.datetime.now(), stock_data), result)
+    self.stock_all_data.append(stock_data)
     logger.debug("Trading End!")
 
   def init_process(self):
@@ -109,4 +110,5 @@ if __name__ == "__main__":
   elif SIMULATOR == "True":
     simulate(until=span)
   logger.debug("End Trading...")
+  pickle.dump(p.stock_all_data, result)
   result.close()
