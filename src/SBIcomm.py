@@ -164,8 +164,7 @@ class SBIcomm:
         soup = self._get_soup(self.pages['correct'] % order_num)
         try:
             l = soup.find("form", action="/bsite/member/stock/orderCorrectEntry.do", method="POST")
-            m = re.search("\d{4}", l.find("td").contents[0].contents[0])
-            code = int(m.group(0))
+            code = int(extract_num(l.find("td").contents[0].contents[0]))
             l = soup.find("form", action="/bsite/member/stock/orderCorrectConfirm.do", method="POST")
             state = l.findAll("td")[1].contents[0]
             n_order = int(extract_num(l.findAll("td")[3].contents[0]))
