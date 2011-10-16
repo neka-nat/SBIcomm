@@ -22,8 +22,15 @@ def extract_num(string):
     return "".join(pat.findall(string))
 
 COMP = {'MORE':'0', 'LESS':'1'}
-ORDER = {'LIM_UNC':' ', 'LIM_YORI':'Z', 'LIM_HIKI':'I', 'LIM_HUSE':'F', 'LIM_IOC':'P',
-         'MRK_UNC':'N', 'MRK_YORI':'Y', 'MRK_HIKI':'H', 'MRK_IOC':'O'}
+ORDER = {'LIM_UNC':' ',   # 指値無条件
+         'LIM_YORI':'Z',  # 指値寄指
+         'LIM_HIKI':'I',  # 指値引指
+         'LIM_HUSE':'F',  # 指値不成
+         'LIM_IOC':'P',   # 指値IOC
+         'MRK_UNC':'N',   # 成行無条件
+         'MRK_YORI':'Y',  # 成行寄成
+         'MRK_HIKI':'H',  # 成行引成
+         'MRK_IOC':'O'}   # 成行IOC
 CATEGORY = {'SPC':'0', 'STD':'1'}
 
 # 祝日の設定
@@ -122,28 +129,30 @@ class SBIcomm:
             return None, None
 
     def buy_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
-                  comp='MORE', category='SPC', inv=False, trigger_price=None):
+                  category='SPC', inv=False, comp='MORE', trigger_price=None):
         """
         買注文を行う
         """
         br = self._init_open(self.pages['buy'] % (code, str(inv).lower()))
         br.select_form(nr=0)
-        self._set_order_propaty(br, quantity, price, limit, order, comp)
+        self._set_order_propaty(br, quantity, price, limit, order)
         if inv == True:
+            br["trigger_zone"] = [COMP[comp]]
             br["trigger_price"] = str(trigger_price)
         br["hitokutei_trade_kbn"] = [CATEGORY[category]]
         br["password"] = self.password
         return self._confirm(br)
 
     def sell_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
-                   comp='MORE', inv=False, trigger_price=None):
+                   inv=False, comp='MORE', trigger_price=None):
         """
         売注文を行う
         """
         br = self._init_open(self.pages['sell'] % (code, str(inv).lower()))
         br.select_form(nr=0)
-        self._set_order_propaty(br, quantity, price, limit, order, comp)
+        self._set_order_propaty(br, quantity, price, limit, order)
         if inv == True:
+            br["trigger_zone"] = [COMP[comp]]
             br["trigger_price"] = str(trigger_price)
         br["password"] = self.password
         return self._confirm(br)
@@ -197,12 +206,13 @@ class SBIcomm:
         br["password"] = self.password
         br.submit()
 
-    def _set_order_propaty(self, br, quantity, price, limit, order, comp):
+    def _set_order_propaty(self, br, quantity, price, limit, order):
         """
         オーダー時の設定を行う
         """
         br["quantity"] = str(quantity)
-        br["price"] = str(price)
+        if order.startswith("LIM"):
+            br["price"] = str(price)
         if limit == 0:
             br["caLiKbn"] = ["today"]
         elif limit <= 6:
@@ -212,7 +222,6 @@ class SBIcomm:
         else:
             raise "Cannot setting 6 later working day!"
         br["sasinari_kbn"] = [ORDER[order]]
-        br["trigger_zone"] = [COMP[comp]]
 
     def _confirm(self, br):
         """
@@ -258,7 +267,7 @@ class SBIcomm:
 
 if __name__ == "__main__":
     sbi = SBIcomm("hogehoge", "hogehoge")
-    print sbi.buy_order(6758,100,1000, inv=True, trigger_price=999)
+    print sbi.buy_order(6758, 100, 1000, inv=True, trigger_price=999)
     print sbi.get_value(6758)
     print sbi.get_purchase_margin()
     print sbi.get_total_eval()
