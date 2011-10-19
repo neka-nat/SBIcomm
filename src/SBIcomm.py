@@ -44,8 +44,8 @@ class SBIcomm:
     ACC_DIR = DOMAIN + "/bsite/member/acc"
     pages = {'top':DOMAIN + "/bsite/visitor/top.do",
              'search':DOMAIN + "/bsite/price/search.do",
-             'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%d&cayen.isStopOrder=%s",
-             'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%d&cayen.isStopOrder=%s",
+             'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
+             'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
              'list':STOCK_DIR + "/orderList.do?cayen.comboOff=1",
              'correct':STOCK_DIR + "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=%s",
              'cancel':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=%s",
