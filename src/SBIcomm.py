@@ -189,6 +189,19 @@ class SBIcomm:
         lists = soup.findAll("tr", bgcolor="#f9f9f9")
         return int(extract_num(lists[wday_step].find("td", align="right").contents[0]))
 
+    def get_hold_stock_info(self):
+        """
+        現在の所持している株の情報を取得
+        """
+        soup = self._get_soup(self.pages['manege'])
+        lists = soup.find("table", border="0", cellspacing="1", cellpadding="2", width="100%", bgcolor="#7E7ECC").findAll("tr")
+        stock_list = []
+        for l0, l2 in zip(lists[0::3], lists[2::3]):
+            val_str = l2.contents[7].contents[0].contents[0]
+            stock_list.append({"code":int(extract_num(l0.contents[0].contents[0])), 
+                               "eval":eval(val_str[0]+"1")*int(extract_num(val_str))})
+        return stock_list
+
     def get_total_eval(self):
         """
         現在の評価合計を取得する
