@@ -3,6 +3,6 @@
 mechanize
 BeautifulSoup
 workday
-simpy
+APScheduler
 
 このプログラムの使用によって生じる責任は一切負いません。

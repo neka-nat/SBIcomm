@@ -196,10 +196,12 @@ class SBIcomm:
         soup = self._get_soup(self.pages['manege'])
         lists = soup.find("table", border="0", cellspacing="1", cellpadding="2", width="100%", bgcolor="#7E7ECC").findAll("tr")
         stock_list = []
-        for l0, l2 in zip(lists[0::3], lists[2::3]):
+        for l0, l1, l2 in zip(lists[0::3], lists[1::3], lists[2::3]):
             val_str = l2.contents[7].contents[0].contents[0]
             stock_list.append({"code":int(extract_num(l0.contents[0].contents[0])), 
-                               "eval":eval(val_str[0]+"1")*int(extract_num(val_str))})
+                               "number":int(extract_num(l1.contents[7].contents[0])),
+                               "val":int(extract_num(l1.contents[3].contents[0])),
+                               "gain":eval(val_str[0]+"1")*int(extract_num(val_str))})
         return stock_list
 
     def get_total_eval(self):
