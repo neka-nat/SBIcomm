@@ -57,7 +57,7 @@ class SBIcomm:
     logger = logging.getLogger("mechanize")
     logfile = open("sbicomm.log", 'w')
     logger.addHandler(logging.StreamHandler(logfile))
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     def __init__(self, username=None, password=None,
                  proxy=None, proxy_user=None, proxy_password=None):
@@ -125,8 +125,8 @@ class SBIcomm:
             date = datetime.date(datetime.date.today().year, int(num_list[0]), int(num_list[1]))
             return date, [start_price, end_price, max_price, min_price, volume, gain_loss, gain_loss/(end_price-gain_loss)]
         except:
-            print "Cannot Get Value! %d" % code
-            return None, None
+            self.logger.info("Cannot Get Value! %d" % code)
+            return datetime.date.today(), None
 
     def buy_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
                   category='SPC', inv=False, comp='MORE', trigger_price=None):
@@ -210,7 +210,10 @@ class SBIcomm:
         """
         soup = self._get_soup(self.pages['manege'])
         lists = soup.findAll("table", border="0", cellspacing="1", cellpadding="2", width="100%")
-        return int(extract_num(lists[0].findAll("td")[1].contents[0]))
+        try:
+            return int(extract_num(lists[0].findAll("td")[1].contents[0]))
+        except:
+            raise "Cannot Get Total Evaluate!"
 
     def cancel_order(self, order_num):
         """
@@ -235,6 +238,7 @@ class SBIcomm:
             day = workdays.workday(datetime.date.today(), limit, holidays)
             br["limit"]=[day.strftime("%Y/%m/%d")]
         else:
+            self.logger.info("Cannot setting 6 later working day!")
             raise "Cannot setting 6 later working day!"
         br["sasinari_kbn"] = [ORDER[order]]
 
@@ -248,10 +252,11 @@ class SBIcomm:
         br.select_form(nr=0)
         try:
             req = br.click(type="submit", nr=0)
-            print "Submitting Order..."
+            self.logger.info("Submitting Order...")
             time.sleep(SLEEP_TIME)
             res = br.open(req)
         except:
+            self.logger.info("Cannot Order!")
             raise "Cannot Order!"
         try:
             html = res.read().decode(self.ENC)
@@ -260,6 +265,7 @@ class SBIcomm:
             res.close()
             return inputs[0]["value"]
         except:
+            self.logger.info("Cannot Get Order Code!")
             raise "Cannot Get Order Code!"
 
     def _init_open(self, page):
