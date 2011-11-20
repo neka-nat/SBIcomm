@@ -1,6 +1,6 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
-import time, datetime
+import sys, time, datetime
 import yaml # pickle
 import SBIcomm
 import StockSimulator
@@ -93,8 +93,10 @@ class Trader:
     orders = {}
     def __init__(self, init_res, sbi, max_order=5, use_time=OPEN):
         self.resource = init_res
+        self.order_num = 0
         self.sbi = sbi
         self.max_order = max_order
+        hold_stock = sbi.get_hold_stock_info()
     def buy(self, code, num):
         if len(self.orders) >= self.max_order:
             return False
@@ -103,22 +105,27 @@ class Trader:
         try:
             margin = self.sbi.get_purchase_margin()
             if margin > value[1][CLOSE] * num:
-                #ordr_no = self.sbi.buy_order(code, num, order='MRK_YORI')
+                #order_no = self.sbi.buy_order(code, num, order='MRK_YORI')
+                #logger.info("Order NO is %s" % order_no)
                 pass
             else:
                 return False
         except:
             logger.info("Cannot Buy %d" % code)
             return False
-        self.orders[ordr_no] = Order(day, code, value, num)
+        self.orders[self.order_num] = Order(day, code, value, num)
+        self.order_num += 1
         logger.info("Buy code:%d, value:%d, num:%d" % (code, value, num))
         return True
 
-    def sell(self, key):
-        if key in self.orders: 
-            #self.sbi.sell_order(self.orders[key].code, self.orders[key].num, order='MRK_YORI')
-            logger.info("Sell code:%d, num:%d" % (self.orders[key].code, self.orders[key].num))
-            del(self.orders[key])
+    def sell(self, order_num):
+        if order_num in self.orders: 
+            #self.sbi.sell_order(self.orders[order_num].code, self.orders[order_num].num, order='MRK_YORI')
+            logger.info("Sell code:%d, num:%d" % (self.orders[order_num].code, self.orders[order_num].num))
+            del(self.orders[order_num])
+            return True
+        else:
+            return False
 
     def get_total_resource(self):
         total_res = self.sbi.get_total_eval() + self.sbi.get_purchase_margin()
@@ -184,7 +191,7 @@ class TradeManeger:
                 f = open("filt_value.dat", 'r')
                 day, self.filt_value = yaml.load(f)
                 f.close()
-                if datetime.date.today() == day + datetime.timedelta(days=1):
+                if datetime.date.today() != day + datetime.timedelta(days=1):
                     self.filt_value = init_filter(tm, tms)
             except:
                 self.filt_value = init_filter(tm, tms)
@@ -288,5 +295,8 @@ def sim_trade():
     view_data(days, data)
 
 if __name__ == "__main__":
-    real_trade()
-    #sim_trade()
+    if len(sys.argv) > 1 and sys.argv[1] == 'sim':
+        sim_trade()
+    else:
+        real_trade()
+
