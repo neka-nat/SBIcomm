@@ -1,7 +1,7 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
-import sys, time, datetime
-import yaml # pickle
+import sys, time, datetime, pickle
+import yaml
 import SBIcomm
 import StockSimulator
 import yahoo_finance_jp
@@ -226,6 +226,9 @@ class TradeManeger:
             f = open("filt_value.dat", 'w')
             yaml.dump([datetime.date.today(), self.filt_value], f)
             f.close()
+            f = open("stock_value_%s.dat" % str(day), 'w')
+            pickle.dump([day, stock_value], f)
+            f.close()
 
         # 買い判定
         # 条件を満たすものを検索
@@ -255,7 +258,7 @@ class TradeManeger:
             if order.code in stock_value:
                 if (stock_value[order.code][self.use_time] - order.value)*order.num < -self.get_total_resource()*0.05 or \
                         day - order.day > datetime.timedelta(days=10):
-                    logger.info("Sell code: %d" % key)
+                    logger.info("Loss Cut code: %d" % key)
                     self.trader.sell(key)
         logger.info("***** End Trading *****")
 
