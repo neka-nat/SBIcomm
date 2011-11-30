@@ -1,7 +1,8 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
 import sys, time, datetime, pickle
-import yaml
+import yaml, workdays
+holidays = []
 import SBIcomm
 import StockSimulator
 import yahoo_finance_jp
@@ -191,7 +192,7 @@ class TradeManeger:
                 f = open("filt_value.dat", 'r')
                 day, self.filt_value = yaml.load(f)
                 f.close()
-                if datetime.date.today() != day + datetime.timedelta(days=1):
+                if datetime.date.today() != workdays.workday(day, 1, holidays):
                     self.filt_value = init_filter(tm, tms)
             except:
                 self.filt_value = init_filter(tm, tms)
@@ -237,6 +238,8 @@ class TradeManeger:
                          lambda key, v:self.filt_value[0][key][VOLUME]*self.filt_value[0][key][self.use_time] > avg_val,
                          lambda key, v:(v[self.use_time] - self.filt_value[1][key][self.use_time])/v[self.use_time] < down_rate]
         for key, v in stock_value.items():
+            cnds = [cnd(key, v) for cnd in buy_condition]
+            print key, cnds
             if all([cnd(key, v) for cnd in buy_condition]):
                 searched_codes[key] = v
         if len(searched_codes) > 0:

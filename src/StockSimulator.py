@@ -2,7 +2,6 @@
 #!/usr/bin/env python
 
 import pickle
-from operator import itemgetter
 import code
 
 class StockSimulator:
