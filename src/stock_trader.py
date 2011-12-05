@@ -179,6 +179,10 @@ class TradeManeger:
     STOCK_UNIT = 100
     use_time = CLOSE
     simulate = True
+
+    cnt = 0
+    max_down_rate = 1.0
+
     def __init__(self, username, password, tm, tms, simulate=True):
         self.simulate = simulate
         if self.simulate == True:
@@ -192,7 +196,8 @@ class TradeManeger:
                 f = open("filt_value.dat", 'r')
                 day, self.filt_value = yaml.load(f)
                 f.close()
-                if datetime.date.today() != workdays.workday(day, 1, holidays):
+                if datetime.date.today() != workdays.workday(day, 1, holidays) or \
+                        datetime.date.today() != day:
                     self.filt_value = init_filter(tm, tms)
             except:
                 self.filt_value = init_filter(tm, tms)
@@ -264,6 +269,17 @@ class TradeManeger:
                     logger.info("Loss Cut code: %d" % key)
                     self.trader.sell(key)
         logger.info("***** End Trading *****")
+
+        # calc down rate
+        total_res = self.get_total_resource()
+        if self.cnt == 0:
+            self.rate_base = total_res
+        else:
+            if self.max_down_rate > total_res/self.rate_base:
+                self.max_down_rate = total_res/self.rate_base
+            elif total_res/self.rate_base > 1.0:
+                self.rate_base = total_res
+        self.cnt += 1
 
     def get_total_resource(self):
         if self.simulate == True:
