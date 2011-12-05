@@ -57,6 +57,8 @@ class SBIcomm:
     logger = logging.getLogger("mechanize")
     logfile = open("sbicomm.log", 'w')
     logger.addHandler(logging.StreamHandler(logfile))
+    logger.addHandler(logging.StreamHandler(sys.stdout))
+
     logger.setLevel(logging.INFO)
 
     def __init__(self, username=None, password=None,
