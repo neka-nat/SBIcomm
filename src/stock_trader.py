@@ -2,10 +2,9 @@
 # -*- coding:utf-8 -*-
 import sys, time, datetime, pickle
 import yaml, workdays
-holidays = []
-import SBIcomm
+from SBIcomm import *
 import StockSimulator
-import yahoo_finance_jp
+import yahoo_finance_jp, quotes
 from yahoo_finance_jp import OPEN, CLOSE, MAX, MIN, VOLUME, N_DATA
 from code import CODE
 import logging
@@ -34,6 +33,10 @@ def param2rate(param):
     rate_param[3] = param[3]/50.0 + 5
     return rate_param
 DOWN_RATE, AVG_VAL, TM, TMS = param2rate(GA_PARAM)
+
+INDICES = ['nk225', 'nk225f', 'topix', 'jasdaq_average',
+           'jasdaq_index', 'jasdaq_standard', 'jasdaq_growth',
+           'jasdaq_top20', 'j_stock', 'mothers_index', 'jgb_long_future']
 
 def lowpass_filter(days, value, filt_value):
     return [(value[i] + days*filt_value[i])/(1.0+days) for i in range(N_DATA)]
@@ -190,13 +193,13 @@ class TradeManeger:
             self.sbi.load()
             self.filt_value = [{}, {}]
         else:
-            self.sbi = SBIcomm.SBIcomm(username, password)
+            self.sbi = SBIcomm(username, password)
             self.total_res = self.get_total_resource()
             try:
                 f = open("filt_value.dat", 'r')
                 day, self.filt_value = yaml.load(f)
                 f.close()
-                if datetime.date.today() != workdays.workday(day, 1, holidays) or \
+                if datetime.date.today() != workdays.workday(day, 1, holidays_list(day.year)) or \
                         datetime.date.today() != day:
                     self.filt_value = init_filter(tm, tms)
             except:
@@ -210,6 +213,11 @@ class TradeManeger:
         logger.info("Init Res :%d" % self.total_res)
 
     def trade(self, down_rate, avg_val, tm, tms):
+        today = datetime.date.today()
+        # 祝日はトレードできない
+        if today in holidays_list(today.year):
+            logger.info("Today is holiday! : " + str(today))
+            return
         logger.info("****** Start Trading ******")
         stock_value = {}
         for code in CODE.values():
@@ -229,11 +237,18 @@ class TradeManeger:
             if self.sbi.t <= tm:
                 return
         else:
+            # データの保存
             f = open("filt_value.dat", 'w')
             yaml.dump([datetime.date.today(), self.filt_value], f)
             f.close()
             f = open("stock_value_%s.dat" % str(day), 'w')
             pickle.dump([day, stock_value], f)
+            f.close()
+            f = open("market_indices_%s.dat" % str(day), 'w')
+            pickle.dump(dict((idx, self.sbi.get_market_index(idx)) for idx in INDICES), f)
+            f.close()
+            f = open("quotes_%s.dat" % str(day), 'w')
+            pickle.dump(quotes.realtime_quotes(), f)
             f.close()
 
         # 買い判定
