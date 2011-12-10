@@ -1,7 +1,9 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
 import sys, re
-import time, datetime, workdays
+import time, datetime
+import workdays
+from dateutil.relativedelta import *
 import mechanize
 from BeautifulSoup import BeautifulSoup
 
@@ -34,16 +36,41 @@ ORDER = {'LIM_UNC':' ',   # 指値無条件
 CATEGORY = {'SPC':'0', 'STD':'1'}
 
 # 祝日の設定
-holidays = []
-SLEEP_TIME = 2
+def holidays_list(year):
+    equinox = [lambda y:int(20.8431 + 0.242194 * ( y - 1980)) - int((y - 1980)/4),
+               lambda y:int(23.2488 + 0.242194 * ( y - 1980)) - int((y - 1980)/4)]
+    holidays = [datetime.date(year, 1, 1),  # 元日
+                datetime.date(year, 1, 1) + relativedelta(weekday=MO(+2)), # 成人の日
+                datetime.date(year, 2, 11), # 建国記念日
+                datetime.date(year, 3, equinox[0](year)), # 春分の日
+                datetime.date(year, 4, 29), # 昭和の日
+                datetime.date(year, 5, 3),  # 憲法記念日
+                datetime.date(year, 5, 4),  # みどりの日
+                datetime.date(year, 5, 5),  # こどもの日
+                datetime.date(year, 7, 1) + relativedelta(weekday=MO(+3)), # 海の日
+                datetime.date(year, 9, 1) + relativedelta(weekday=MO(+3)), # 敬老の日
+                datetime.date(year, 9, equinox[1](year)), # 秋分の日
+                datetime.date(year, 10, 1) + relativedelta(weekday=MO(+2)),# 体育の日
+                datetime.date(year, 11, 3), # 文化の日
+                datetime.date(year, 11, 23),# 勤労感謝の日
+                datetime.date(year, 12, 23)]# 天皇誕生日
+    # 振替休日の追加
+    for holiday in holidays:
+        if holiday.weekday() == 6:
+            holidays.append(holiday+datetime.timedelta(days=1))
+    return holidays
 
 class SBIcomm:
+    """
+    SBI証券のサイトをスクレイピングして株価の情報取得やオーダーの送信等のやりとりを行うクラス
+    """
     # URL
     DOMAIN = "https://k.sbisec.co.jp"
     STOCK_DIR = DOMAIN + "/bsite/member/stock"
     ACC_DIR = DOMAIN + "/bsite/member/acc"
     pages = {'top':DOMAIN + "/bsite/visitor/top.do",
              'search':DOMAIN + "/bsite/price/search.do",
+             'market':DOMAIN + "/bsite/market/indexDetail.do",
              'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
              'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
              'list':STOCK_DIR + "/orderList.do?cayen.comboOff=1",
@@ -53,6 +80,7 @@ class SBIcomm:
              'manege':ACC_DIR + "/holdStockList.do"}
 
     ENC = "cp932"
+    SLEEP_TIME = 2
 
     logger = logging.getLogger("mechanize")
     logfile = open("sbicomm.log", 'w')
@@ -92,7 +120,7 @@ class SBIcomm:
         br["username"] = self.username
         br["password"] = self.password
         br.submit()
-        #time.sleep(SLEEP_TIME)
+        #time.sleep(self.SLEEP_TIME)
         return br
 
     def get_value(self, code):
@@ -238,7 +266,8 @@ class SBIcomm:
             br["caLiKbn"] = ["today"]
         elif limit <= 6:
             br["caLiKbn"] = ["limit"]
-            day = workdays.workday(datetime.date.today(), limit, holidays)
+            today = datetime.date.today()
+            day = workdays.workday(today, limit, holidays_list(today.year))
             br["limit"]=[day.strftime("%Y/%m/%d")]
         else:
             self.logger.info("Cannot setting 6 later working day!")
@@ -256,7 +285,7 @@ class SBIcomm:
         try:
             req = br.click(type="submit", nr=0)
             self.logger.info("Submitting Order...")
-            time.sleep(SLEEP_TIME)
+            time.sleep(self.SLEEP_TIME)
             res = br.open(req)
         except:
             self.logger.info("Cannot Order!")
