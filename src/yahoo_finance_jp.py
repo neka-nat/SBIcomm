@@ -97,6 +97,12 @@ def getTick(code,end_date=None,start_date=None,length=500):
 
   return ts
 
+def getNikkeiStockAverage(end_date=None,start_date=None,length=500):
+  """
+  日経平均(998407)の取得
+  """
+  return getTick(998407,end_date,start_date,length)
+
 if __name__ == "__main__":
   from pylab import *
   from matplotlib.dates import  DateFormatter, WeekdayLocator, DayLocator, MONDAY, num2date

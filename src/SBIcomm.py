@@ -19,7 +19,7 @@ def set_encode(br, enc):
     br._factory._forms_factory.encoding = enc
     br._factory._links_factory._encoding = enc
 
-pat = re.compile(r'\d+')
+pat = re.compile(r'\d+\.*')
 def extract_num(string):
     return "".join(pat.findall(string))
 
@@ -154,10 +154,47 @@ class SBIcomm:
             min_price = float(m[2])
             # 日付の取得
             date = datetime.date(datetime.date.today().year, int(num_list[0]), int(num_list[1]))
-            return date, [start_price, end_price, max_price, min_price, volume, gain_loss, gain_loss/(end_price-gain_loss)]
+            return date, [start_price, end_price, max_price, min_price, volume,
+                          gain_loss, gain_loss/(end_price-gain_loss)]
         except:
             self.logger.info("Cannot Get Value! %d" % code)
             return datetime.date.today(), None
+
+    def get_market_index(self, index_name='nk225'):
+        """
+        市場の指標を返す
+        日経平均    : nk225
+        日経平均先物 : nk225f
+        TOPIX     : topix
+        JASDAQ平均 : jasdaq_average
+        JASDAQ指数 : jasdaq_index
+        JASDAQ・S指数 : jasdaq_standard
+        JASDAQ・G指数 : jasdaq_growth
+        JQ-TOP20 : jasdaq_top20
+        Jストック  : j_stock
+        マザーズ指数 : mothers_index
+        長期国債先物 : jgb_long_future
+        """
+        br = self._browser_open()
+        br.open(self.pages['market'])
+        set_encode(br, self.ENC)
+        br.select_form(nr=0)
+        br["data_type"] = [index_name]
+        req = br.click(type="submit", nr=0)
+        res = br.open(req)
+        html = res.read().decode(self.ENC)
+        soup = BeautifulSoup(html)
+        price_list = soup.findAll("table", border="0", cellspacing="2",
+                                  cellpadding="0", style="margin-top:5px;")
+        l = price_list[0].findAll("font")
+        end_price = float(extract_num(l[0].contents[0]))
+        gain_loss = eval(l[1].contents[0][0] + "1.0") * float(extract_num(l[1].contents[0]))
+        l = price_list[1].findAll("td")
+        start_price = float(extract_num(l[1].contents[0]))
+        max_price = float(extract_num(l[3].contents[0]))
+        min_price = float(extract_num(l[5].contents[0]))
+        return [start_price, end_price, max_price, min_price,
+                gain_loss, gain_loss/(end_price-gain_loss)]
 
     def buy_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
                   category='SPC', inv=False, comp='MORE', trigger_price=None):
@@ -324,3 +361,4 @@ if __name__ == "__main__":
     print sbi.get_value(6758)
     print sbi.get_purchase_margin()
     print sbi.get_total_eval()
+    print sbi.get_market_index("j_stock")
