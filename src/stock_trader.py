@@ -38,53 +38,38 @@ INDICES = ['nk225', 'nk225f', 'topix', 'jasdaq_average',
            'jasdaq_index', 'jasdaq_standard', 'jasdaq_growth',
            'jasdaq_top20', 'j_stock', 'mothers_index', 'jgb_long_future']
 
-def lowpass_filter(days, value, filt_value):
-    return [(value[i] + days*filt_value[i])/(1.0+days) for i in range(N_DATA)]
+def lowpass_filter(tm, value, filt_value):
+    """
+    ローパスフィルター
+    """
+    return [(value[i] + tm*filt_value[i])/(1.0+tm) for i in range(len(value))]
 
 def get_stock_data(code, length):
+    """
+    企業コードと株価履歴を返す
+    """
     return (code, yahoo_finance_jp.getTick(code, length=length))
 
-def init_filter(tm, tms):
+def init_filter(tm_list):
+    """
+    フィルター値の初期化
+    """
     from Pool2 import Pool2
     from functools import partial
-    logger.info("Initialize Filtering Value...")
-    filt_value = [{},{}]
+    filt_value = [{} for _ in range(len(tm_list))]
+    tm_max = max(tm_list)
 
     p = Pool2(50)
-    datum = p.map(partial(get_stock_data, length=int(tm)), CODE.values())
+    datum = p.map(partial(get_stock_data, length=int(tm_max)), CODE.values())
 
-    # フィルターの初期化
     for code, data in datum:
         data.reverse()
         if len(data) > 0:
-            filt_value[0][code] = data[0][1:]
-            filt_value[1][code] = data[0][1:]
-            for d in data:
-                filt_value[0][code] = lowpass_filter(tm, d[1:], filt_value[0][code])
-                filt_value[1][code] = lowpass_filter(tms, d[1:], filt_value[0][code])
-    logger.info("End Calc Filt Values.")
+            for i, tm in enumerate(tm_list):
+                filt_value[i][code] = data[0][1:]
+                for d in data:
+                    filt_value[i][code] = lowpass_filter(tm, d[1:], filt_value[0][code])
     return filt_value
-
-def view_data(days, data):
-    mondays       = WeekdayLocator(MONDAY)  # major ticks on the mondays
-    alldays       = DayLocator()            # minor ticks on the days
-    weekFormatter = DateFormatter('%b %d')  # Eg, Jan 12
-    dayFormatter  = DateFormatter('%d')     # Eg, 12
-
-    fig = figure()
-    fig.subplots_adjust(bottom=0.2)
-    ax = fig.add_subplot(111)
-    ax.xaxis.set_major_locator(mondays)
-    ax.xaxis.set_minor_locator(alldays)
-    ax.xaxis.set_major_formatter(weekFormatter)
-    ax.plot(days, data)
-
-    ax.xaxis_date()
-    ax.autoscale_view()
-    setp( gca().get_xticklabels(), rotation=45, horizontalalignment='right')
-
-    #show()
-    savefig('graph.png')
 
 class Order:
     def __init__(self, day, code, value, num):
@@ -186,7 +171,7 @@ class TradeManeger:
     cnt = 0
     max_down_rate = 1.0
 
-    def __init__(self, username, password, tm, tms, simulate=True):
+    def __init__(self, username, password, tm_list, simulate=True):
         self.simulate = simulate
         if self.simulate == True:
             self.sbi = StockSimulator.StockSimulator()
@@ -199,11 +184,10 @@ class TradeManeger:
                 f = open("filt_value.dat", 'r')
                 day, self.filt_value = yaml.load(f)
                 f.close()
-                if datetime.date.today() != workdays.workday(day, 1, holidays_list(day.year)) or \
-                        datetime.date.today() != day:
-                    self.filt_value = init_filter(tm, tms)
+                if not datetime.date.today() <= workdays.workday(day, 1, holidays_list(day.year)):
+                    self.filt_value = init_filter(tm_list)
             except:
-                self.filt_value = init_filter(tm, tms)
+                self.filt_value = init_filter(tm_list)
 
         if self.simulate == True:
             self.trader = SimTrader(500000, sim=self.sbi)
@@ -239,16 +223,17 @@ class TradeManeger:
         else:
             # データの保存
             f = open("filt_value.dat", 'w')
-            yaml.dump([datetime.date.today(), self.filt_value], f)
+            yaml.dump([today, self.filt_value], f)
             f.close()
             f = open("stock_value_%s.dat" % str(day), 'w')
             pickle.dump([day, stock_value], f)
             f.close()
             f = open("market_indices_%s.dat" % str(day), 'w')
-            pickle.dump(dict((idx, self.sbi.get_market_index(idx)) for idx in INDICES), f)
+            indices = dict((idx, self.sbi.get_market_index(idx)) for idx in INDICES)
+            pickle.dump([day, indices], f)
             f.close()
             f = open("quotes_%s.dat" % str(day), 'w')
-            pickle.dump(quotes.realtime_quotes(), f)
+            pickle.dump([today, quotes.realtime_quotes()], f)
             f.close()
 
         # 買い判定
@@ -258,8 +243,6 @@ class TradeManeger:
                          lambda key, v:self.filt_value[0][key][VOLUME]*self.filt_value[0][key][self.use_time] > avg_val,
                          lambda key, v:(v[self.use_time] - self.filt_value[1][key][self.use_time])/v[self.use_time] < down_rate]
         for key, v in stock_value.items():
-            cnds = [cnd(key, v) for cnd in buy_condition]
-            print key, cnds
             if all([cnd(key, v) for cnd in buy_condition]):
                 searched_codes[key] = v
         if len(searched_codes) > 0:
@@ -279,8 +262,8 @@ class TradeManeger:
         # Loss Cut
         for key, order in self.trader.orders.items():
             if order.code in stock_value:
-                if (stock_value[order.code][self.use_time] - order.value)*order.num < -self.get_total_resource()*0.05 or \
-                        day - order.day > datetime.timedelta(days=10):
+                loss = (stock_value[order.code][self.use_time] - order.value)*order.num
+                if loss < -self.get_total_resource()*0.05 or day - order.day > datetime.timedelta(days=10):
                     logger.info("Loss Cut code: %d" % key)
                     self.trader.sell(key)
         logger.info("***** End Trading *****")
@@ -295,6 +278,9 @@ class TradeManeger:
             elif total_res/self.rate_base > 1.0:
                 self.rate_base = total_res
         self.cnt += 1
+
+    def get_max_down_rate(self):
+        return self.max_down_rate
 
     def get_total_resource(self):
         if self.simulate == True:
@@ -313,27 +299,51 @@ def real_trade():
     sched = Scheduler()
     sched.start()
 
-    maneger = TradeManeger(USERNAME, PASSWARD, TM, TMS, simulate=False)
+    maneger = TradeManeger(USERNAME, PASSWARD, [TM, TMS], simulate=False)
 
     sched.add_cron_job(maneger.trade, day_of_week='mon-fri', hour=7, args=[DOWN_RATE, AVG_VAL, TM, TMS])
     sched.add_cron_job(maneger.get_total_resource, day_of_week='mon-fri', hour=17)
     signal.pause()
 
-def sim_trade():
-    maneger = TradeManeger(USERNAME, PASSWARD, TM, TMS)
+def view_data(days, data):
+    mondays       = WeekdayLocator(MONDAY)  # major ticks on the mondays
+    alldays       = DayLocator()            # minor ticks on the days
+    weekFormatter = DateFormatter('%b %d')  # Eg, Jan 12
+    dayFormatter  = DateFormatter('%d')     # Eg, 12
+
+    fig = figure()
+    fig.subplots_adjust(bottom=0.2)
+    ax = fig.add_subplot(111)
+    ax.xaxis.set_major_locator(mondays)
+    ax.xaxis.set_minor_locator(alldays)
+    ax.xaxis.set_major_formatter(weekFormatter)
+    ax.plot(days, data)
+
+    ax.xaxis_date()
+    ax.autoscale_view()
+    setp( gca().get_xticklabels(), rotation=45, horizontalalignment='right')
+
+    #show()
+    savefig('graph.png')
+
+def sim_trade(params, graph=True):
+    maneger = TradeManeger(USERNAME, PASSWARD, params[2:4])
     days = []
     data = []
     while maneger.sbi.isLastDay() == False:
-        maneger.trade(DOWN_RATE, AVG_VAL, TM, TMS)
+        maneger.trade(*params)
         days.append(maneger.sbi.getNowDay())
         data.append(maneger.get_total_resource())
         print days[-1], data[-1]
         maneger.sbi.goNextDay()
-    view_data(days, data)
+        evl = float(500000)/data[-1] + 1.0/maneger.get_max_down_rate()
+    if graph:
+        view_data(days, data)
+    return evl
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == 'sim':
         sim_trade()
     else:
-        real_trade()
+        real_trade([DOWN_RATE, AVG_VAL, TM, TMS])
 
