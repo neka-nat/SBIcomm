@@ -292,6 +292,9 @@ class TradeManeger:
 
 
 def real_trade():
+    """
+    自動売買
+    """
     from apscheduler.scheduler import Scheduler
     import signal
 
@@ -306,6 +309,9 @@ def real_trade():
     signal.pause()
 
 def view_data(days, data):
+    """
+    データのグラフ化
+    """
     mondays       = WeekdayLocator(MONDAY)  # major ticks on the mondays
     alldays       = DayLocator()            # minor ticks on the days
     weekFormatter = DateFormatter('%b %d')  # Eg, Jan 12
@@ -327,6 +333,9 @@ def view_data(days, data):
     savefig('graph.png')
 
 def sim_trade(params, graph=True):
+    """
+    トレードのシミュレーション
+    """
     maneger = TradeManeger(USERNAME, PASSWARD, params[2:4])
     days = []
     data = []

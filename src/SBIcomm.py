@@ -5,7 +5,7 @@ import time, datetime
 import workdays
 from dateutil.relativedelta import *
 import mechanize
-from BeautifulSoup import BeautifulSoup
+from BeautifulSoup import *
 
 import logging
 import copy
@@ -18,6 +18,15 @@ def set_encode(br, enc):
     br._factory.encoding = enc
     br._factory._forms_factory.encoding = enc
     br._factory._links_factory._encoding = enc
+
+def getNavigableStrings(soup):
+  if isinstance(soup, NavigableString):
+    if type(soup) not in (Comment, Declaration) and soup.strip():
+      yield soup
+  elif soup.name not in ('script', 'style'):
+    for c in soup.contents:
+      for g in getNavigableStrings(c):
+        yield g
 
 pat = re.compile(r'\d+\.*')
 def extract_num(string):
@@ -34,6 +43,8 @@ ORDER = {'LIM_UNC':' ',   # 指値無条件
          'MRK_HIKI':'H',  # 成行引成
          'MRK_IOC':'O'}   # 成行IOC
 CATEGORY = {'SPC':'0', 'STD':'1'}
+
+TODAY_MARKET, USA_MARKET, INDUSTRIES, EMERGING, FORECAST, MARK= range(1,8)
 
 # 祝日の設定
 def holidays_list(year):
@@ -71,6 +82,7 @@ class SBIcomm:
     pages = {'top':DOMAIN + "/bsite/visitor/top.do",
              'search':DOMAIN + "/bsite/price/search.do",
              'market':DOMAIN + "/bsite/market/indexDetail.do",
+             'info':DOMAIN + "/bsite/market/marketInfoDetail.do?id=%02d",
              'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
              'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
              'list':STOCK_DIR + "/orderList.do?cayen.comboOff=1",
@@ -195,6 +207,21 @@ class SBIcomm:
         min_price = float(extract_num(l[5].contents[0]))
         return [start_price, end_price, max_price, min_price,
                 gain_loss, gain_loss/(end_price-gain_loss)]
+
+    def get_market_info(self, info_no=TODAY_MARKET):
+        """
+        市場情報を取得する
+        """
+        soup = self._get_soup(self.pages['info'] % info_no)
+        text_list = soup.findAll("table", border="0", cellspacing="0",
+                                 cellpadding="0", width="100%", style="margin-top:10px;")
+        return '\n'.join(getNavigableStrings(text_list[1]))
+
+    def get_market_news(self):
+        """
+        ニュースを取得する
+        """
+        soup = self._get_soup(self.pages['info'] % info_no)
 
     def buy_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
                   category='SPC', inv=False, comp='MORE', trigger_price=None):
@@ -362,3 +389,4 @@ if __name__ == "__main__":
     print sbi.get_purchase_margin()
     print sbi.get_total_eval()
     print sbi.get_market_index("j_stock")
+    print sbi.get_market_info()
