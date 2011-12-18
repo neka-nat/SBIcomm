@@ -44,7 +44,7 @@ ORDER = {'LIM_UNC':' ',   # 指値無条件
          'MRK_IOC':'O'}   # 成行IOC
 CATEGORY = {'SPC':'0', 'STD':'1'}
 
-TODAY_MARKET, USA_MARKET, INDUSTRIES, EMERGING, FORECAST, MARK= range(1,8)
+TODAY_MARKET, USA_MARKET, INDUSTRIES, EMERGING, ATTENTION, FORECAST, MARK= range(1,8)
 
 # 祝日の設定
 def holidays_list(year):
@@ -83,6 +83,7 @@ class SBIcomm:
              'search':DOMAIN + "/bsite/price/search.do",
              'market':DOMAIN + "/bsite/market/indexDetail.do",
              'info':DOMAIN + "/bsite/market/marketInfoDetail.do?id=%02d",
+             'news':DOMAIN + "/bsite/market/newsList.do?page=%d",
              'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
              'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
              'list':STOCK_DIR + "/orderList.do?cayen.comboOff=1",
@@ -221,7 +222,29 @@ class SBIcomm:
         """
         ニュースを取得する
         """
-        soup = self._get_soup(self.pages['info'] % info_no)
+        br = self.submit_user_and_pass()
+        urls = []
+        for page in range(5):
+            br.open(self.pages['news'] % page)
+            set_encode(br, self.ENC)
+            for link in br.links(url_regex='newsDetail'):
+                urls.append(self.DOMAIN + link.url)
+        br.close()
+
+        text_list = []
+        for url in urls:
+            br = self.submit_user_and_pass()
+            res = br.open(url)
+            html = res.read().decode(self.ENC)
+            soup = BeautifulSoup(html)
+            lists = soup.findAll("table", width="100%", cellspacing="0", cellpadding="0")
+            date = '\n'.join(getNavigableStrings(lists[2].contents[1].find("td").contents[3]))
+            text = '\n'.join(getNavigableStrings(lists[2].contents[1].find("td").contents[4]))
+            text = text.strip()
+            text_list.append([date, text])
+            br.close()
+
+        return text_list
 
     def buy_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
                   category='SPC', inv=False, comp='MORE', trigger_price=None):
