@@ -235,6 +235,12 @@ class TradeManeger:
             f = open("quotes_%s.dat" % str(day), 'w')
             pickle.dump([today, quotes.realtime_quotes()], f)
             f.close()
+            f = open("market_info_%s.dat" % str(day), 'w')
+            pickle.dump([self.sbi.get_market_info(i) for i in range(1,8)], f)
+            f.close()
+            f = open("market_news_%s.dat" % str(day), 'w')
+            pickle.dump(self.sbi.get_market_news(), f)
+            f.close()
 
         # 買い判定
         # 条件を満たすものを検索
