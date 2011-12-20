@@ -42,7 +42,7 @@ def lowpass_filter(tm, value, filt_value):
     """
     ローパスフィルター
     """
-    return [(value[i] + tm*filt_value[i])/(1.0+tm) for i in range(len(value))]
+    return [(value[i] + tm*filt_value[i])/(1.0+tm) for i in range(len(filt_value))]
 
 def get_stock_data(code, length):
     """
@@ -360,5 +360,5 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == 'sim':
         sim_trade()
     else:
-        real_trade([DOWN_RATE, AVG_VAL, TM, TMS])
+        real_trade()
 
