@@ -1,6 +1,7 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
 import sys, time, datetime, pickle
+import traceback
 import yaml, workdays
 from SBIcomm import *
 import StockSimulator
@@ -101,6 +102,7 @@ class Trader:
                 return False
         except:
             logger.info("Cannot Buy %d" % code)
+            logger.info(traceback.format_exc())
             return False
         self.orders[self.order_num] = Order(day, code, value, num)
         self.order_num += 1
@@ -187,6 +189,7 @@ class TradeManeger:
                 if not datetime.date.today() <= workdays.workday(day, 1, holidays_list(day.year)):
                     self.filt_value = init_filter(tm_list)
             except:
+                logger.info(traceback.format_exc())
                 self.filt_value = init_filter(tm_list)
 
         if self.simulate == True:

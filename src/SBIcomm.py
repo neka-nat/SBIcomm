@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 import sys, re
 import time, datetime
+import traceback
 import workdays
 from dateutil.relativedelta import *
 import mechanize
@@ -171,6 +172,7 @@ class SBIcomm:
                           gain_loss, gain_loss/(end_price-gain_loss)]
         except:
             self.logger.info("Cannot Get Value! %d" % code)
+            self.logger.info(traceback.format_exc())
             return datetime.date.today(), None
 
     def get_market_index(self, index_name='nk225'):
@@ -297,6 +299,7 @@ class SBIcomm:
             n_order = int(extract_num(l.findAll("td")[3].contents[0]))
             return {'code':code, 'number':n_order, 'state':state}
         except:
+            self.logger.info(traceback.format_exc())
             raise "Cannot get info!", order_num
 
     def get_purchase_margin(self, wday_step=0):
@@ -331,6 +334,7 @@ class SBIcomm:
         try:
             return int(extract_num(lists[0].findAll("td")[1].contents[0]))
         except:
+            self.logger.info(traceback.format_exc())
             raise "Cannot Get Total Evaluate!"
 
     def cancel_order(self, order_num):
@@ -376,6 +380,7 @@ class SBIcomm:
             res = br.open(req)
         except:
             self.logger.info("Cannot Order!")
+            self.logger.info(traceback.format_exc())
             raise "Cannot Order!"
         try:
             html = res.read().decode(self.ENC)
@@ -385,6 +390,7 @@ class SBIcomm:
             return inputs[0]["value"]
         except:
             self.logger.info("Cannot Get Order Code!")
+            self.logger.info(traceback.format_exc())
             raise "Cannot Get Order Code!"
 
     def _init_open(self, page):
