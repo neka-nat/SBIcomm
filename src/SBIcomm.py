@@ -127,26 +127,48 @@ class SBIcomm:
         """
         トップページにユーザー名とパスワードを送信
         """
+        cnt = 0
         br = self._browser_open()
-        br.open(self.pages['top'])
-        set_encode(br, self.ENC)
-        br.select_form(name="form1")
-        br["username"] = self.username
-        br["password"] = self.password
-        br.submit()
-        #time.sleep(self.SLEEP_TIME)
+        while True:
+            try:
+                br.open(self.pages['top'])
+                set_encode(br, self.ENC)
+                br.select_form(name="form1")
+                br["username"] = self.username
+                br["password"] = self.password
+                br.submit()
+                #time.sleep(self.SLEEP_TIME)
+                break
+            except Exception, error:
+                self.logger.info("Open Error! Retry URL Open.")
+                self.logger.info(traceback.format_exc())
+                time.sleep(5)
+                cnt += 1
+                if cnt > 3:
+                    raise error
         return br
 
     def get_value(self, code):
         """
         現在の日付、株価を返す
         """
+        cnt = 0
         br = self._browser_open()
-        res = br.open(self.pages['search'])
-        set_encode(br, self.ENC)
-        br.select_form(nr=0)
-        br["ipm_product_code"] = str(code)
-        res = br.submit()
+        while True:
+            try:
+                res = br.open(self.pages['search'])
+                set_encode(br, self.ENC)
+                br.select_form(nr=0)
+                br["ipm_product_code"] = str(code)
+                res = br.submit()
+                break
+            except Exception, error:
+                self.logger.info("Open Error! Retry URL Open.")
+                self.logger.info(traceback.format_exc())
+                time.sleep(5)
+                cnt += 1
+                if cnt > 3:
+                    raise error
         # 取得したhtmlを解析して日付と価格を求める
         html = res.read().decode(self.ENC)
         soup = BeautifulSoup(html)
