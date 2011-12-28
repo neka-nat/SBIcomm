@@ -33,6 +33,9 @@ pat = re.compile(r'\d+\.*')
 def extract_num(string):
     return "".join(pat.findall(string))
 
+def extract_plus_minus_num(string):
+    return eval(string[0] + "1.0") * float(extract_num(string))
+
 COMP = {'MORE':'0', 'LESS':'1'}
 ORDER = {'LIM_UNC':' ',   # 指値無条件
          'LIM_YORI':'Z',  # 指値寄指
@@ -87,6 +90,7 @@ class SBIcomm:
              'news':DOMAIN + "/bsite/market/newsList.do?page=%d",
              'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
              'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
+             'credit':DOMAIN + "/bsite/price/marginDetail.do?ipm_product_code=%d&market=TKY",
              'list':STOCK_DIR + "/orderList.do?cayen.comboOff=1",
              'correct':STOCK_DIR + "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=%s",
              'cancel':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=%s",
@@ -184,7 +188,7 @@ class SBIcomm:
                 gain_loss = 0.0
             else:
                 num_str = num.contents[0]
-                gain_loss = eval(num_str[0]+"1.0")*float(extract_num(num_str))
+                gain_loss = extract_plus_minus_num(num_str)
             start_price = float(m[0])
             max_price = float(m[1])
             min_price = float(m[2])
@@ -225,7 +229,7 @@ class SBIcomm:
                                   cellpadding="0", style="margin-top:5px;")
         l = price_list[0].findAll("font")
         end_price = float(extract_num(l[0].contents[0]))
-        gain_loss = eval(l[1].contents[0][0] + "1.0") * float(extract_num(l[1].contents[0]))
+        gain_loss = extract_plus_minus_num(l[1].contents[0])
         l = price_list[1].findAll("td")
         start_price = float(extract_num(l[1].contents[0]))
         max_price = float(extract_num(l[3].contents[0]))
@@ -269,6 +273,32 @@ class SBIcomm:
             br.close()
 
         return text_list
+
+    def get_credit_record(self, code):
+        """
+        企業の信用情報を取得する
+        """
+        soup = self._get_soup(self.pages['credit'] % code)
+        lists = soup.findAll("table", border="0", cellspacing="0", cellpadding="0")
+        l = lists[5].findAll("td")
+        records = {}
+        records["dead_stock"] = [int(extract_num(l[1].contents[0])), extract_plus_minus_num(l[3].contents[0])]
+        records["margin_balance"] = [int(extract_num(l[5].contents[0])), extract_plus_minus_num(l[7].contents[0])]
+        records["ratio"] = float(records["margin_balance"][0])/float(records["dead_stock"][0])
+        
+        l = lists[6].findAll("td")
+        records["lending_stock"] = {"new":int(extract_num(l[2].contents[0])),
+                                    "repayment":int(extract_num(l[4].contents[0])),
+                                    "balance":int(extract_num(l[6].contents[0])),
+                                    "ratio":extract_plus_minus_num(l[8].contents[0])}
+        records["finance_loan"] = {"new":int(extract_num(l[11].contents[0])),
+                                   "repayment":int(extract_num(l[13].contents[0])),
+                                   "balance":int(extract_num(l[15].contents[0])),
+                                   "ratio":extract_plus_minus_num(l[17].contents[0])}
+        records["diff"] = records["finance_loan"]["balance"] - records["lending_stock"]["balance"]
+        records["diff_ratio"] = extract_plus_minus_num(l[21].contents[0])
+        records["balance_ratio"] = float(extract_num(l[24].contents[0]))
+        return records
 
     def buy_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
                   category='SPC', inv=False, comp='MORE', trigger_price=None):
