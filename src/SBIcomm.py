@@ -282,9 +282,9 @@ class SBIcomm:
         lists = soup.findAll("table", border="0", cellspacing="0", cellpadding="0")
         l = lists[5].findAll("td")
         records = {}
-        records["dead_stock"] = [int(extract_num(l[1].contents[0])), extract_plus_minus_num(l[3].contents[0])]
-        records["margin_balance"] = [int(extract_num(l[5].contents[0])), extract_plus_minus_num(l[7].contents[0])]
-        records["ratio"] = float(records["margin_balance"][0])/float(records["dead_stock"][0])
+        records["unsold"] = [int(extract_num(l[1].contents[0])), extract_plus_minus_num(l[3].contents[0])]
+        records["margin"] = [int(extract_num(l[5].contents[0])), extract_plus_minus_num(l[7].contents[0])]
+        records["ratio"] = float(records["margin"][0])/float(records["unsold"][0])
         
         l = lists[6].findAll("td")
         records["lending_stock"] = {"new":int(extract_num(l[2].contents[0])),

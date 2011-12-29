@@ -6,6 +6,7 @@ from BeautifulSoup import BeautifulSoup
 
 N_DATA = 5
 OPEN, CLOSE, MAX, MIN, VOLUME = range(N_DATA)
+UNSOLD, MARGIN, DIFF_UNSOLD, DIFF_MARGIN, RATIO = range(N_DATA)
 
 def _extractStr(content):
   """extract strings from soup data which contains bold style"""
@@ -36,8 +37,7 @@ def _splitToTick(soup):
 
   return [date, open_v, close_v, max_v, min_v, volume_v]
   
-
-def getTick(code,end_date=None,start_date=None,length=500):
+def getTick(code,end_date=None,start_date=None,length=500,kind=0):
   print "getting data of tikker %s from yahoo finance...   " % code
 
   # initialize
@@ -61,8 +61,12 @@ def getTick(code,end_date=None,start_date=None,length=500):
   niter = 0 # iteration counter
   while(niter < length) :
     # prepare BeautifulSoup object
-    url_t = "http://table.yahoo.co.jp/t?s=%s&a=%s&b=%s&c=%s&d=%s&e=%s&f=%s&g=d&q=t&y=%d&z=%s&x=.csv" \
-    % (code, start_m, start_d, start_y, end_m, end_d, end_y,niter,code)
+    if kind == 0:
+      url_t = "http://table.yahoo.co.jp/t?s=%s&a=%s&b=%s&c=%s&d=%s&e=%s&f=%s&g=d&q=t&y=%d&z=%s&x=.csv" \
+          % (code, start_m, start_d, start_y, end_m, end_d, end_y,niter,code)
+    else:
+      url_t = "http://table.yahoo.co.jp/bt?s=%s.t&a=%s&b=%s&c=%s&d=%s&e=%s&f=%s&g=d&q=t&y=%d&z=%s&x=.csv" \
+          % (code, start_m, start_d, start_y, end_m, end_d, end_y,niter,code)
     try:
       url_data = unicode(urllib.urlopen(url_t).read(), enc, 'ignore')
     except:
@@ -109,10 +113,15 @@ if __name__ == "__main__":
   from matplotlib.finance import candlestick, plot_day_summary, candlestick2
   from matplotlib.dates import date2num
 
-  stock_data = getTick(6752, length=10)
+  stock_data = getTick(6752, length=300)
+  credit_rec = getTick(6752, length=300, kind=1)
   stock_data.reverse()
+  credit_rec.reverse()
   for i in range(len(stock_data)):
     stock_data[i][0] = date2num(stock_data[i][0])
+
+  for i in range(len(credit_rec)):
+    credit_rec[i][0] = date2num(credit_rec[i][0])
 
   mondays       = WeekdayLocator(MONDAY)  # major ticks on the mondays
   alldays       = DayLocator()            # minor ticks on the days
@@ -121,13 +130,19 @@ if __name__ == "__main__":
 
   fig = figure()
   fig.subplots_adjust(bottom=0.2)
-  ax = fig.add_subplot(111)
+  ax = fig.add_subplot(211)
+  ax2 = fig.add_subplot(212)
   ax.xaxis.set_major_locator(mondays)
   ax.xaxis.set_minor_locator(alldays)
   ax.xaxis.set_major_formatter(weekFormatter)
+  ax2.xaxis.set_major_formatter(weekFormatter)
+
   candlestick(ax, stock_data, width=0.6)
+  credit_rec = map(list, zip(*credit_rec))
+  ax2.plot(credit_rec[0], credit_rec[RATIO+1])
 
   ax.xaxis_date()
+  ax2.xaxis_date()
   ax.autoscale_view()
   setp( gca().get_xticklabels(), rotation=45, horizontalalignment='right')
 

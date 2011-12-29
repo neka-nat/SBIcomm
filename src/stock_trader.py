@@ -244,6 +244,13 @@ class TradeManeger:
             f = open("market_news_%s.dat" % str(day), 'w')
             pickle.dump(self.sbi.get_market_news(), f)
             f.close()
+            if day.weekday() > workdays.workday(day, 1, holidays_list(day.year)).weekday():
+                records = {}
+                for code in CODE.values():
+                    records[code] = self.sbi.get_credit_record(code)
+                f = open("credit_records_%s.dat" % str(day), 'w')
+                pickle.dump(records, f)
+                f.close()
 
         # 買い判定
         # 条件を満たすものを検索
