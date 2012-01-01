@@ -20,7 +20,7 @@ def _extractStr(content):
   string = re.sub(",","",temp)
   return string
 
-def _splitToTick(soup):
+def _splitToTick(soup, kind=0):
   """ split a soup to a tick datum """
   # convert date format yyyy年m月d日 into yyyy/m/d
   date_str = soup.contents[1].small.string
@@ -35,7 +35,10 @@ def _splitToTick(soup):
   close_v  = float(_extractStr(soup.contents[9]))
   volume_v = float(_extractStr(soup.contents[11]))
 
-  return [date, open_v, close_v, max_v, min_v, volume_v]
+  if kind == 0:
+    return [date, open_v, close_v, max_v, min_v, volume_v]
+  else:
+    return [date, open_v, max_v, min_v, close_v, volume_v]
   
 def getTick(code,end_date=None,start_date=None,length=500,kind=0):
   print "getting data of tikker %s from yahoo finance...   " % code
@@ -63,10 +66,10 @@ def getTick(code,end_date=None,start_date=None,length=500,kind=0):
     # prepare BeautifulSoup object
     if kind == 0:
       url_t = "http://table.yahoo.co.jp/t?s=%s&a=%s&b=%s&c=%s&d=%s&e=%s&f=%s&g=d&q=t&y=%d&z=%s&x=.csv" \
-          % (code, start_m, start_d, start_y, end_m, end_d, end_y,niter,code)
+          % (code, start_m, start_d, start_y, end_m, end_d, end_y,niter, code)
     else:
       url_t = "http://table.yahoo.co.jp/bt?s=%s.t&a=%s&b=%s&c=%s&d=%s&e=%s&f=%s&g=d&q=t&y=%d&z=%s&x=.csv" \
-          % (code, start_m, start_d, start_y, end_m, end_d, end_y,niter,code)
+          % (code, start_m, start_d, start_y, end_m, end_d, end_y,niter, code)
     try:
       url_data = unicode(urllib.urlopen(url_t).read(), enc, 'ignore')
     except:
@@ -93,7 +96,7 @@ def getTick(code,end_date=None,start_date=None,length=500,kind=0):
 
     # split price_list each day
     for data in price_list:
-      prices = _splitToTick(data)
+      prices = _splitToTick(data, kind)
       ts.append(prices)
     
     # increment iteration counter
@@ -113,8 +116,8 @@ if __name__ == "__main__":
   from matplotlib.finance import candlestick, plot_day_summary, candlestick2
   from matplotlib.dates import date2num
 
-  stock_data = getTick(6752, length=300)
-  credit_rec = getTick(6752, length=300, kind=1)
+  stock_data = getTick(1515, length=300)
+  credit_rec = getTick(1515, length=300, kind=1)
   stock_data.reverse()
   credit_rec.reverse()
   for i in range(len(stock_data)):

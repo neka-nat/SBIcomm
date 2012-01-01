@@ -43,7 +43,20 @@ def lowpass_filter(tm, value, filt_value):
     """
     ローパスフィルター
     """
-    return [(value[i] + tm*filt_value[i])/(1.0+tm) for i in range(len(filt_value))]
+    if type(filt_value) == list:
+        if len(filt_value) == 0:
+            return value
+        else:
+            return [lowpass_filter(tm, value[i], filt_value[i]) for i in range(len(filt_value))]
+    elif type(filt_value) == dict:
+        if len(filt_value) == 0:
+            return value
+        else:
+            return dict((key, lowpass_filter(tm, value[key], fval)) for key, fval in filt_value.items())
+    elif type(filt_value) in (int, long, float):
+        return (value + tm*filt_value)/(1.0+tm)
+    else:
+        return None
 
 def get_stock_data(code, length):
     """
@@ -171,6 +184,8 @@ class TradeManeger:
     simulate = True
 
     cnt = 0
+    credit_records = {}
+    filt_rec = {}
     max_down_rate = 1.0
 
     def __init__(self, username, password, tm_list, simulate=True):
@@ -200,11 +215,13 @@ class TradeManeger:
         logger.info("Init Res :%d" % self.total_res)
 
     def trade(self, down_rate, avg_val, tm, tms):
-        today = datetime.date.today()
-        # 祝日はトレードできない
-        if today in holidays_list(today.year):
-            logger.info("Today is holiday! : " + str(today))
-            return
+        if self.simulate == False:
+            today = datetime.date.today()
+            # 祝日はトレードできない
+            if today in holidays_list(today.year):
+                logger.info("Today is holiday! : " + str(today))
+                return
+
         logger.info("****** Start Trading ******")
         stock_value = {}
         for code in CODE.values():
@@ -212,6 +229,7 @@ class TradeManeger:
             if not value[1] is None:
                 stock_value[code] = value[1]
             day = value[0]
+
         for key, data in stock_value.items():
             if key in self.filt_value[0].keys():
                 self.filt_value[0][key] = lowpass_filter(tm, data, self.filt_value[0][key])
@@ -219,6 +237,23 @@ class TradeManeger:
             else:
                 self.filt_value[0][key] = data
                 self.filt_value[1][key] = data
+
+        # 信用取引関連のデータを週に一度取得する
+        if len(self.credit_records) == 0 or \
+                (day.weekday() > workdays.workday(day, 1, holidays_list(day.year)).weekday()):
+            for code in CODE.values():
+                rec = self.sbi.get_credit_record(code)
+                if not rec is None:
+                    self.credit_records[code] = rec
+            for key, data in self.credit_records.items():
+                if key in self.filt_rec.keys():
+                    self.filt_rec[key] = lowpass_filter(10, self.credit_records[key], self.filt_rec[key])
+                else:
+                    self.filt_rec[key] = self.credit_records[key]
+            if self.simulate == False:
+                f = open("credit_records_%s.dat" % str(day), 'w')
+                pickle.dump(self.credit_records, f)
+                f.close()
 
         if self.simulate == True:
             if self.sbi.t <= tm:
@@ -244,13 +279,6 @@ class TradeManeger:
             f = open("market_news_%s.dat" % str(day), 'w')
             pickle.dump(self.sbi.get_market_news(), f)
             f.close()
-            if day.weekday() > workdays.workday(day, 1, holidays_list(day.year)).weekday():
-                records = {}
-                for code in CODE.values():
-                    records[code] = self.sbi.get_credit_record(code)
-                f = open("credit_records_%s.dat" % str(day), 'w')
-                pickle.dump(records, f)
-                f.close()
 
         # 買い判定
         # 条件を満たすものを検索
@@ -259,8 +287,12 @@ class TradeManeger:
                          lambda key, v:self.filt_value[0][key][VOLUME]*self.filt_value[0][key][self.use_time] > avg_val,
                          lambda key, v:(v[self.use_time] - self.filt_value[1][key][self.use_time])/v[self.use_time] < down_rate]
         for key, v in stock_value.items():
-            if all([cnd(key, v) for cnd in buy_condition]):
-                searched_codes[key] = v
+            try:
+                if all([cnd(key, v) for cnd in buy_condition]):
+                    searched_codes[key] = v
+            except KeyError:
+                logger.info(traceback.format_exc())
+
         if len(searched_codes) > 0:
             for key, v in sorted(searched_codes.items(), key = lambda x: self.filt_value[0][x[0]][VOLUME], reverse=True):
                 logger.info("Buy code: %d, num: %d" % (key, self.STOCK_UNIT*5))
@@ -368,7 +400,7 @@ def sim_trade(params, graph=True):
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == 'sim':
-        sim_trade()
+        sim_trade([DOWN_RATE, AVG_VAL, TM, TMS])
     else:
         real_trade()
 

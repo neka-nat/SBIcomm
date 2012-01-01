@@ -7,41 +7,27 @@ import code
 class StockSimulator:
     def __init__(self, data = None):
         self.t = 0
+        self.w = 0
         if not data is None:
             self.stock_values = data
 
-    def load(self, filedir="./", sum_file = True):
-        if sum_file == True:
-            f = open("stock_data.dat", 'r')
-            print "Loading datum..."
-            self.stock_values = pickle.load(f)
-            print "Finish loading datum"
-            f.close()
-        else:
-            stock_data = {}
-            filename = filedir + 'stock_data_%d.dat'
-            print "Loading datum..."
-            for c in code.CODE.values():
-                data_file = open(filename % c)
-                tmp_data = pickle.load(data_file)
-                stock_data[c] = dict((d[0], d[1:]) for d in tmp_data)
-                data_file.close()
-            print "Finish loading datum"
+    def load(self, filedir="./"):
+        f = open("stock_data.dat", 'r')
+        print "Loading datum..."
+        self.stock_values = pickle.load(f)
+        print "Finish loading datum"
+        f.close()
 
-            max_length = max([len(data) for data in stock_data.values()])
-            for data in stock_data.values():
-                if len(data) == max_length:
-                    days = sorted(data.keys())
-                    break
-
-            self.stock_values = [[day, {}] for day in days]
-            for key, data in stock_data.items():
-                for i, d in enumerate(days):
-                    if d in stock_data[key]:
-                        self.stock_values[i][1][key] = stock_data[key][d]
+        f = open("credit_records.dat", 'r')
+        print "Loading datum..."
+        self.credit_records = pickle.load(f)
+        print "Finish loading datum"
+        f.close()
 
     def goNextDay(self):
         self.t += 1
+        if self.stock_values[self.t][0] >= self.credit_records[self.w+1][0]:
+            self.w += 1
 
     def get_value(self, code):
         if code in self.stock_values[self.t][1]:
@@ -51,6 +37,17 @@ class StockSimulator:
 
     def getStockValue(self):
         return self.stock_values[self.t][1]
+
+    def get_credit_record(self, code):
+        if code in self.credit_records[self.w][1]:
+            credit_records = self.credit_records[self.w][1][code]
+            ret = {}
+            ret["unsold"] = [credit_records[0], credit_records[2]]
+            ret["margin"] = [credit_records[1], credit_records[3]]
+            ret["ratio"] = credit_records[4]
+            return ret
+        else:
+            return None
 
     def getNowDay(self):
         return self.stock_values[self.t][0]
@@ -69,9 +66,3 @@ class StockSimulator:
             return True
         else:
             return False
-
-    def saveFile(self):
-        f = open("stock_data.dat", 'w')
-        pickle.dump(self.stock_values, f)
-        f.close()
-
