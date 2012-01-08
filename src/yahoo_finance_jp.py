@@ -8,6 +8,10 @@ N_DATA = 5
 OPEN, CLOSE, MAX, MIN, VOLUME = range(N_DATA)
 UNSOLD, MARGIN, DIFF_UNSOLD, DIFF_MARGIN, RATIO = range(N_DATA)
 
+pat = re.compile(r'\d+\.*')
+def extract_num(string):
+    return "".join(pat.findall(string))
+
 def _extractStr(content):
   """extract strings from soup data which contains bold style"""
   found = content.findAll('b')
@@ -33,7 +37,10 @@ def _splitToTick(soup, kind=0):
   max_v    = float(_extractStr(soup.contents[5]))
   min_v    = float(_extractStr(soup.contents[7]))
   close_v  = float(_extractStr(soup.contents[9]))
-  volume_v = float(_extractStr(soup.contents[11]))
+  try:
+    volume_v = float(_extractStr(soup.contents[11]))
+  except:
+    volume_v = None
 
   if kind == 0:
     return [date, open_v, close_v, max_v, min_v, volume_v]
@@ -110,14 +117,47 @@ def getNikkeiStockAverage(end_date=None,start_date=None,length=500):
   """
   return getTick(998407,end_date,start_date,length)
 
+def getDetailInfo(code):
+  url = "http://stocks.finance.yahoo.co.jp/stocks/detail/?code=%d" % code
+  try:
+    url_data = urllib.urlopen(url).read()
+  except:
+    return None
+  
+  soup = BeautifulSoup(url_data)
+
+  lists = soup.findAll("dd")
+  info = {}
+
+  try:
+    info["PER"] = float(extract_num(lists[11].contents[0].contents[0]))
+  except:
+    info["PER"] = None
+  try:
+    info["PBR"] = float(extract_num(lists[12].contents[0].contents[0]))
+  except:
+    info["PBR"] = None
+  try:
+    info["EPS"] = float(extract_num(lists[13].contents[0].contents[0]))
+  except:
+    info["EPS"] = None
+  try:
+    info["BPS"] = float(extract_num(lists[14].contents[0].contents[0]))
+  except:
+    info["BPS"] = None
+
+  return info
+
+
 if __name__ == "__main__":
   from pylab import *
   from matplotlib.dates import  DateFormatter, WeekdayLocator, DayLocator, MONDAY, num2date
   from matplotlib.finance import candlestick, plot_day_summary, candlestick2
   from matplotlib.dates import date2num
 
-  stock_data = getTick(1515, length=300)
-  credit_rec = getTick(1515, length=300, kind=1)
+  print getDetailInfo(1515)
+  stock_data = getTick(1515, length=50)
+  credit_rec = getTick(1515, length=50, kind=1)
   stock_data.reverse()
   credit_rec.reverse()
   for i in range(len(stock_data)):

@@ -54,7 +54,9 @@ TODAY_MARKET, USA_MARKET, INDUSTRIES, EMERGING, ATTENTION, FORECAST, MARK= range
 def holidays_list(year):
     equinox = [lambda y:int(20.8431 + 0.242194 * ( y - 1980)) - int((y - 1980)/4),
                lambda y:int(23.2488 + 0.242194 * ( y - 1980)) - int((y - 1980)/4)]
-    holidays = [datetime.date(year, 1, 1),  # 元日
+    holidays = [datetime.date(year, 1, 1),
+                datetime.date(year, 1, 2),
+                datetime.date(year, 1, 3),
                 datetime.date(year, 1, 1) + relativedelta(weekday=MO(+2)), # 成人の日
                 datetime.date(year, 2, 11), # 建国記念日
                 datetime.date(year, 3, equinox[0](year)), # 春分の日
@@ -68,7 +70,14 @@ def holidays_list(year):
                 datetime.date(year, 10, 1) + relativedelta(weekday=MO(+2)),# 体育の日
                 datetime.date(year, 11, 3), # 文化の日
                 datetime.date(year, 11, 23),# 勤労感謝の日
-                datetime.date(year, 12, 23)]# 天皇誕生日
+                datetime.date(year, 12, 23),# 天皇誕生日
+                datetime.date(year, 12, 29),
+                datetime.date(year, 12, 30),
+                datetime.date(year, 12, 31),
+                datetime.date(year+1, 1, 1),
+                datetime.date(year+1, 1, 2),
+                datetime.date(year+1, 1, 3)]
+
     # 振替休日の追加
     for holiday in holidays:
         if holiday.weekday() == 6:
@@ -237,6 +246,9 @@ class SBIcomm:
         return [start_price, end_price, max_price, min_price,
                 gain_loss, gain_loss/(end_price-gain_loss)]
 
+    def get_nikkei_avg(self):
+        return self.get_market_index()
+
     def get_market_info(self, info_no=TODAY_MARKET):
         """
         市場情報を取得する
@@ -368,13 +380,13 @@ class SBIcomm:
         """
         soup = self._get_soup(self.pages['manege'])
         lists = soup.find("table", border="0", cellspacing="1", cellpadding="2", width="100%", bgcolor="#7E7ECC").findAll("tr")
-        stock_list = []
+        stock_list = {}
         for l0, l1, l2 in zip(lists[0::3], lists[1::3], lists[2::3]):
             val_str = l2.contents[7].contents[0].contents[0]
-            stock_list.append({"code":int(extract_num(l0.contents[0].contents[0])), 
-                               "number":int(extract_num(l1.contents[7].contents[0])),
-                               "val":int(extract_num(l1.contents[3].contents[0])),
-                               "gain":eval(val_str[0]+"1")*int(extract_num(val_str))})
+            code = int(extract_num(l0.contents[0].contents[0]))
+            stock_list[code] = {"number":int(extract_num(l1.contents[7].contents[0])),
+                                "value":int(extract_num(l1.contents[3].contents[0])),
+                                "gain":eval(val_str[0]+"1")*int(extract_num(val_str))}
         return stock_list
 
     def get_total_eval(self):

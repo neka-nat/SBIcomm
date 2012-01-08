@@ -25,15 +25,8 @@ conf.read('trader.conf')
 USERNAME = conf.get('infomation', 'username')
 PASSWARD = conf.get('infomation', 'password')
 
-GA_PARAM = [-3.066033838989616, 49.139048308887546, -34.730907381269624, 7.1634582429315055]
-def param2rate(param):
-    rate_param = [0.0 for _ in range(4)]
-    rate_param[0] = param[0]/1000.0 - 0.1
-    rate_param[1] = param[1]*100000.0 + 20000000.0
-    rate_param[2] = param[2] + 180
-    rate_param[3] = param[3]/50.0 + 5
-    return rate_param
-DOWN_RATE, AVG_VAL, TM, TMS = param2rate(GA_PARAM)
+STOCK_UNIT = 100
+DOWN_RATE, AVG_VAL, TM, TMS = [-0.12, 2000000.0, 120, 6]
 
 INDICES = ['nk225', 'nk225f', 'topix', 'jasdaq_average',
            'jasdaq_index', 'jasdaq_standard', 'jasdaq_growth',
@@ -57,6 +50,9 @@ def lowpass_filter(tm, value, filt_value):
         return (value + tm*filt_value)/(1.0+tm)
     else:
         return None
+
+def calc_rate(obj, base):
+    return (obj - base)/obj
 
 def get_stock_data(code, length):
     """
@@ -86,9 +82,8 @@ def init_filter(tm_list):
     return filt_value
 
 class Order:
-    def __init__(self, day, code, value, num):
+    def __init__(self, day, value, num):
         self.day = day
-        self.code = code
         self.value = value
         self.num = num
 
@@ -96,107 +91,74 @@ class Trader:
     orders = {}
     def __init__(self, init_res, sbi, max_order=5, use_time=OPEN):
         self.resource = init_res
-        self.order_num = 0
         self.sbi = sbi
         self.max_order = max_order
-        hold_stock = sbi.get_hold_stock_info()
-    def buy(self, code, num):
+
+    def buy(self, code, num=None):
         if len(self.orders) >= self.max_order:
             return False
-        day = datetime.date.today()
         value = self.sbi.get_value(code)
         try:
             margin = self.sbi.get_purchase_margin()
-            if margin > value[1][CLOSE] * num:
-                #order_no = self.sbi.buy_order(code, num, order='MRK_YORI')
-                #logger.info("Order NO is %s" % order_no)
-                pass
+            if num is None:
+                num = int(margin*0.90/(value[1][CLOSE]*STOCK_UNIT))*STOCK_UNIT
+                if num <= 0:
+                    return False
+            if margin*0.90 > value[1][CLOSE] * num:
+                order_no = self.sbi.buy_order(code, num, order='MRK_YORI')
+                if order_no is None:
+                    return False
             else:
                 return False
         except:
             logger.info("Cannot Buy %d" % code)
             logger.info(traceback.format_exc())
             return False
-        self.orders[self.order_num] = Order(day, code, value, num)
-        self.order_num += 1
-        logger.info("Buy code:%d, value:%d, num:%d" % (code, value, num))
+        logger.info("Buy code:%d, value:%d, num:%d" % (code, value[1][CLOSE], num))
         return True
 
-    def sell(self, order_num):
-        if order_num in self.orders: 
-            #self.sbi.sell_order(self.orders[order_num].code, self.orders[order_num].num, order='MRK_YORI')
-            logger.info("Sell code:%d, num:%d" % (self.orders[order_num].code, self.orders[order_num].num))
-            del(self.orders[order_num])
+    def sell(self, code):
+        if code in self.orders: 
+            order_no = self.sbi.sell_order(code, self.orders[code].num, order='MRK_YORI')
+            if order_no is None:
+                return False
+            logger.info("Sell code:%d, num:%d" % (code, self.orders[code].num))
+            del(self.orders[code])
             return True
         else:
             return False
+
+    def check_stock(self, day):
+        info = self.sbi.get_hold_stock_info()
+        for key, val in info.items():
+            if key in self.orders.keys():
+                if self.orders[key].num != val["number"]:
+                    self.orders[key] = Order(day, val["value"], val["number"])
+            else:
+                self.orders[key] = Order(day, val["value"], val["number"])
 
     def get_total_resource(self):
         total_res = self.sbi.get_total_eval() + self.sbi.get_purchase_margin()
         return total_res
 
-class SimTrader:
-    orders = {}
-    def __init__(self, init_res, sim, max_order=5, use_time=OPEN):
-        self.resource = init_res
-        self.order_num = 0
-        self.sim = sim
-        self.max_order = max_order
-        self.use_time = use_time
-
-    def buy(self, code, num):
-        if len(self.orders) >= self.max_order:
-            return False
-        if code in self.sim.getNextData():
-            stock_value = self.sim.getNextData()[code]
-        else:
-            return False
-        if self.resource > stock_value[self.use_time]*num:
-            self.resource -= stock_value[self.use_time]*num
-            self.orders[self.order_num] = Order(self.sim.getNowDay(), code, stock_value[self.use_time], num)
-            self.order_num += 1
-            return True
-        else:
-            return False
-
-    def sell(self, order_num):
-        if order_num in self.orders and self.orders[order_num].code in self.sim.getNextData():
-            stock_value = self.sim.getNextData()[self.orders[order_num].code]
-            self.resource += stock_value[self.use_time] * self.orders[order_num].num
-            del(self.orders[order_num])
-            return True
-        else:
-            return False
-
-    def get_total_resource(self):
-        total_res = self.resource
-        for order in self.orders.values():
-            if order.code in self.sim.getStockValue():
-                stock_value = self.sim.getStockValue()[order.code]
-                total_res += stock_value[self.use_time] * order.num
-            else:
-                total_res += order.value * order.num
-        return total_res
-
 class TradeManeger:
-    STOCK_UNIT = 100
     use_time = CLOSE
     simulate = True
 
     cnt = 0
     credit_records = {}
+    detail_info = {}
     filt_rec = {}
+    filt_avg = []
     max_down_rate = 1.0
 
     def __init__(self, username, password, tm_list, simulate=True):
         self.simulate = simulate
         if self.simulate == True:
-            self.sbi = StockSimulator.StockSimulator()
-            self.sbi.load()
+            self.sbi = StockSimulator.BrokerSimulator()
             self.filt_value = [{}, {}]
         else:
             self.sbi = SBIcomm(username, password)
-            self.total_res = self.get_total_resource()
             try:
                 f = open("filt_value.dat", 'r')
                 day, self.filt_value = yaml.load(f)
@@ -207,11 +169,8 @@ class TradeManeger:
                 logger.info(traceback.format_exc())
                 self.filt_value = init_filter(tm_list)
 
-        if self.simulate == True:
-            self.trader = SimTrader(500000, sim=self.sbi)
-            self.total_res = self.trader.get_total_resource()
-        else:
-            self.trader = Trader(self.total_res, self.sbi)
+        self.total_res = self.get_total_resource()
+        self.trader = Trader(self.total_res, self.sbi)
         logger.info("Init Res :%d" % self.total_res)
 
     def trade(self, down_rate, avg_val, tm, tms):
@@ -222,13 +181,20 @@ class TradeManeger:
                 logger.info("Today is holiday! : " + str(today))
                 return
 
-        logger.info("****** Start Trading ******")
+        nikkei_avg = self.sbi.get_nikkei_avg()
+        if len(self.filt_avg) != 0:
+            self.filt_avg = lowpass_filter(60, nikkei_avg, self.filt_avg)
+        else:
+            self.filt_avg = nikkei_avg
+
         stock_value = {}
         for code in CODE.values():
             value = self.sbi.get_value(code)
             if not value[1] is None:
                 stock_value[code] = value[1]
             day = value[0]
+        self.trader.check_stock(day)
+        logger.info("****** Start Trading %s ******" % str(day))
 
         for key, data in stock_value.items():
             if key in self.filt_value[0].keys():
@@ -245,18 +211,28 @@ class TradeManeger:
                 rec = self.sbi.get_credit_record(code)
                 if not rec is None:
                     self.credit_records[code] = rec
+
             for key, data in self.credit_records.items():
                 if key in self.filt_rec.keys():
                     self.filt_rec[key] = lowpass_filter(10, self.credit_records[key], self.filt_rec[key])
                 else:
                     self.filt_rec[key] = self.credit_records[key]
+
             if self.simulate == False:
                 f = open("credit_records_%s.dat" % str(day), 'w')
                 pickle.dump(self.credit_records, f)
                 f.close()
 
+                for code in CODE.values():
+                    info = yahoo_finance_jp.getDetailInfo(code)
+                    if not info is None:
+                        self.detail_info[code] = info
+                f = open("detail_info_%s.dat" % str(day), 'w')
+                pickle.dump(self.detail_info, f)
+                f.close()
+
         if self.simulate == True:
-            if self.sbi.t <= tm:
+            if self.sbi.stock_sim.t <= tm:
                 return
         else:
             # データの保存
@@ -283,9 +259,11 @@ class TradeManeger:
         # 買い判定
         # 条件を満たすものを検索
         searched_codes = {}
-        buy_condition = [lambda key, v:self.filt_value[0][key][self.use_time] < v[self.use_time],
+        buy_condition = [lambda key, v:calc_rate(v[self.use_time], self.filt_value[0][key][self.use_time]) > 0.05,
+                         lambda key, v:calc_rate(nikkei_avg[self.use_time], self.filt_avg[self.use_time]) > 0.0,
+                         #lambda key, v:calc_rate(self.credit_records[key]["ratio"], self.filt_rec[key]["ratio"]) > 0.0,
                          lambda key, v:self.filt_value[0][key][VOLUME]*self.filt_value[0][key][self.use_time] > avg_val,
-                         lambda key, v:(v[self.use_time] - self.filt_value[1][key][self.use_time])/v[self.use_time] < down_rate]
+                         lambda key, v:calc_rate(v[self.use_time], self.filt_value[1][key][self.use_time]) < down_rate]
         for key, v in stock_value.items():
             try:
                 if all([cnd(key, v) for cnd in buy_condition]):
@@ -294,30 +272,28 @@ class TradeManeger:
                 logger.info(traceback.format_exc())
 
         if len(searched_codes) > 0:
-            for key, v in sorted(searched_codes.items(), key = lambda x: self.filt_value[0][x[0]][VOLUME], reverse=True):
-                logger.info("Buy code: %d, num: %d" % (key, self.STOCK_UNIT*5))
-                self.trader.buy(key, self.STOCK_UNIT*5)
+            for key, v in sorted(searched_codes.items(), key = lambda x: calc_rate(v[self.use_time], self.filt_value[1][x[0]][self.use_time]), reverse=False):
+                self.trader.buy(key)
 
         # 売り判定
-        sell_condition = [lambda order:self.filt_value[0][order.code][self.use_time] > stock_value[order.code][self.use_time],
-                          lambda order:(stock_value[order.code][self.use_time] - self.filt_value[1][order.code][self.use_time])/stock_value[order.code][self.use_time] > 0.0]
-        for key, order in self.trader.orders.items():
-            if order.code in stock_value:
-                if all([cnd(order) for cnd in sell_condition]):
+        sell_condition = [lambda code:calc_rate(stock_value[code][self.use_time], self.filt_value[0][code][self.use_time]) < 0.0,
+                          lambda code:calc_rate(stock_value[code][self.use_time], self.filt_value[1][code][self.use_time]) > 0.1]
+        for code in self.trader.orders.keys():
+            if code in stock_value:
+                if any([cnd(code) for cnd in sell_condition]):
                     # 条件合致で全部売る
-                    logger.info("Sell code: %d" % key)
-                    self.trader.sell(key)
+                    self.trader.sell(code)
         # Loss Cut
-        for key, order in self.trader.orders.items():
-            if order.code in stock_value:
-                loss = (stock_value[order.code][self.use_time] - order.value)*order.num
-                if loss < -self.get_total_resource()*0.05 or day - order.day > datetime.timedelta(days=10):
-                    logger.info("Loss Cut code: %d" % key)
-                    self.trader.sell(key)
+        for code, order in self.trader.orders.items():
+            if code in stock_value:
+                loss = (stock_value[code][self.use_time] - order.value)*order.num
+                if loss < -self.sbi.get_total_eval()*0.05 or day > workdays.workday(order.day, 10, holidays_list(day.year)):
+                    logger.info("Loss Cut code: %d" % code)
+                    self.trader.sell(code)
         logger.info("***** End Trading *****")
 
         # calc down rate
-        total_res = self.get_total_resource()
+        total_res = self.sbi.get_total_eval() + self.sbi.get_purchase_margin()
         if self.cnt == 0:
             self.rate_base = total_res
         else:
@@ -331,10 +307,7 @@ class TradeManeger:
         return self.max_down_rate
 
     def get_total_resource(self):
-        if self.simulate == True:
-            self.total_res = self.trader.get_total_resource()
-        else:
-            self.total_res = self.sbi.get_total_eval() + self.sbi.get_purchase_margin()
+        self.total_res = self.sbi.get_total_eval() + self.sbi.get_purchase_margin()
         logger.info("Res: %d" % self.total_res)
         return self.total_res
 
@@ -387,12 +360,11 @@ def sim_trade(params, graph=True):
     maneger = TradeManeger(USERNAME, PASSWARD, params[2:4])
     days = []
     data = []
-    while maneger.sbi.isLastDay() == False:
+    while maneger.sbi.is_ended() == False:
         maneger.trade(*params)
-        days.append(maneger.sbi.getNowDay())
+        days.append(maneger.sbi.stock_sim.getNowDay())
+        maneger.sbi.step()
         data.append(maneger.get_total_resource())
-        print days[-1], data[-1]
-        maneger.sbi.goNextDay()
         evl = float(500000)/data[-1] + 1.0/maneger.get_max_down_rate()
     if graph:
         view_data(days, data)
@@ -403,4 +375,3 @@ if __name__ == "__main__":
         sim_trade([DOWN_RATE, AVG_VAL, TM, TMS])
     else:
         real_trade()
-
