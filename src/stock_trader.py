@@ -1,11 +1,17 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
-import sys, time, datetime, pickle
-import traceback
+try:
+    import psyco
+    psyco.full()
+except ImportError:
+    pass
+
+import sys, time, datetime, cPickle, traceback
 import yaml, workdays
 from SBIcomm import *
+from util import *
 import StockSimulator
-import yahoo_finance_jp, quotes
+import yahoo_finance_jp
 from yahoo_finance_jp import OPEN, CLOSE, MAX, MIN, VOLUME, N_DATA
 from code import CODE
 import logging
@@ -13,11 +19,7 @@ import logging.config
 logging.config.fileConfig('log.conf')
 logger = logging.getLogger('trade')
 
-import numpy
 from pylab import *
-from matplotlib.dates import  DateFormatter, WeekdayLocator, DayLocator, MONDAY, date2num, num2date
-from matplotlib.finance import candlestick, plot_day_summary, candlestick2
-
 import ConfigParser
 # configファイルの読み込み
 conf = ConfigParser.SafeConfigParser()
@@ -27,59 +29,6 @@ PASSWARD = conf.get('infomation', 'password')
 
 STOCK_UNIT = 100
 DOWN_RATE, AVG_VAL, TM, TMS = [-0.12, 2000000.0, 120, 6]
-
-INDICES = ['nk225', 'nk225f', 'topix', 'jasdaq_average',
-           'jasdaq_index', 'jasdaq_standard', 'jasdaq_growth',
-           'jasdaq_top20', 'j_stock', 'mothers_index', 'jgb_long_future']
-
-def lowpass_filter(tm, value, filt_value):
-    """
-    ローパスフィルター
-    """
-    if type(filt_value) == list:
-        if len(filt_value) == 0:
-            return value
-        else:
-            return [lowpass_filter(tm, value[i], filt_value[i]) for i in range(len(filt_value))]
-    elif type(filt_value) == dict:
-        if len(filt_value) == 0:
-            return value
-        else:
-            return dict((key, lowpass_filter(tm, value[key], fval)) for key, fval in filt_value.items())
-    elif type(filt_value) in (int, long, float):
-        return (value + tm*filt_value)/(1.0+tm)
-    else:
-        return None
-
-def calc_rate(obj, base):
-    return (obj - base)/obj
-
-def get_stock_data(code, length):
-    """
-    企業コードと株価履歴を返す
-    """
-    return (code, yahoo_finance_jp.getTick(code, length=length))
-
-def init_filter(tm_list):
-    """
-    フィルター値の初期化
-    """
-    from Pool2 import Pool2
-    from functools import partial
-    filt_value = [{} for _ in range(len(tm_list))]
-    tm_max = max(tm_list)
-
-    p = Pool2(50)
-    datum = p.map(partial(get_stock_data, length=int(tm_max)), CODE.values())
-
-    for code, data in datum:
-        data.reverse()
-        if len(data) > 0:
-            for i, tm in enumerate(tm_list):
-                filt_value[i][code] = data[0][1:]
-                for d in data:
-                    filt_value[i][code] = lowpass_filter(tm, d[1:], filt_value[0][code])
-    return filt_value
 
 class Order:
     def __init__(self, day, value, num):
@@ -114,7 +63,7 @@ class Trader:
             logger.info("Cannot Buy %d" % code)
             logger.info(traceback.format_exc())
             return False
-        logger.info("Buy code:%d, value:%d, num:%d" % (code, value[1][CLOSE], num))
+        logger.info("Buy code:%s, value:%d, num:%d" % (code, value[1][CLOSE], num))
         return True
 
     def sell(self, code):
@@ -122,7 +71,7 @@ class Trader:
             order_no = self.sbi.sell_order(code, self.orders[code].num, order='MRK_YORI')
             if order_no is None:
                 return False
-            logger.info("Sell code:%d, num:%d" % (code, self.orders[code].num))
+            logger.info("Sell code:%s, num:%d" % (code, self.orders[code].num))
             del(self.orders[code])
             return True
         else:
@@ -152,8 +101,9 @@ class TradeManeger:
     filt_avg = []
     max_down_rate = 1.0
 
-    def __init__(self, username, password, tm_list, simulate=True):
+    def __init__(self, username, password, offset_days=0, simulate=True):
         self.simulate = simulate
+        self.offset_days = offset_days
         if self.simulate == True:
             self.sbi = StockSimulator.BrokerSimulator()
             self.filt_value = [{}, {}]
@@ -163,11 +113,9 @@ class TradeManeger:
                 f = open("filt_value.dat", 'r')
                 day, self.filt_value = yaml.load(f)
                 f.close()
-                if not datetime.date.today() <= workdays.workday(day, 1, holidays_list(day.year)):
-                    self.filt_value = init_filter(tm_list)
             except:
                 logger.info(traceback.format_exc())
-                self.filt_value = init_filter(tm_list)
+                self.filt_value = [{}, {}]
 
         self.total_res = self.get_total_resource()
         self.trader = Trader(self.total_res, self.sbi)
@@ -220,7 +168,7 @@ class TradeManeger:
 
             if self.simulate == False:
                 f = open("credit_records_%s.dat" % str(day), 'w')
-                pickle.dump(self.credit_records, f)
+                cPickle.dump(self.credit_records, f)
                 f.close()
 
                 for code in CODE.values():
@@ -228,33 +176,21 @@ class TradeManeger:
                     if not info is None:
                         self.detail_info[code] = info
                 f = open("detail_info_%s.dat" % str(day), 'w')
-                pickle.dump(self.detail_info, f)
+                cPickle.dump(self.detail_info, f)
                 f.close()
 
         if self.simulate == True:
-            if self.sbi.stock_sim.t <= tm:
+            if self.sbi.t <= tm:
                 return
         else:
             # データの保存
             f = open("filt_value.dat", 'w')
             yaml.dump([today, self.filt_value], f)
             f.close()
-            f = open("stock_value_%s.dat" % str(day), 'w')
-            pickle.dump([day, stock_value], f)
-            f.close()
-            f = open("market_indices_%s.dat" % str(day), 'w')
-            indices = dict((idx, self.sbi.get_market_index(idx)) for idx in INDICES)
-            pickle.dump([day, indices], f)
-            f.close()
-            f = open("quotes_%s.dat" % str(day), 'w')
-            pickle.dump([today, quotes.realtime_quotes()], f)
-            f.close()
-            f = open("market_info_%s.dat" % str(day), 'w')
-            pickle.dump([self.sbi.get_market_info(i) for i in range(1,8)], f)
-            f.close()
-            f = open("market_news_%s.dat" % str(day), 'w')
-            pickle.dump(self.sbi.get_market_news(), f)
-            f.close()
+            self.data_save(day, stock_value)
+            if self.offset_days > 0:
+                self.offset_days -= 1
+                return
 
         # 買い判定
         # 条件を満たすものを検索
@@ -283,16 +219,24 @@ class TradeManeger:
                 if any([cnd(code) for cnd in sell_condition]):
                     # 条件合致で全部売る
                     self.trader.sell(code)
+
         # Loss Cut
+        self.loss_cut(day, stock_value)
+
+        # calc down rate
+        self.calc_down_rate()
+
+    def loss_cut(self, day, stock_value, down_rate=0.05, hold_period=10):
         for code, order in self.trader.orders.items():
             if code in stock_value:
                 loss = (stock_value[code][self.use_time] - order.value)*order.num
-                if loss < -self.sbi.get_total_eval()*0.05 or day > workdays.workday(order.day, 10, holidays_list(day.year)):
-                    logger.info("Loss Cut code: %d" % code)
+                if loss < -self.sbi.get_total_eval()*down_rate or \
+                        day > workdays.workday(order.day, hold_period, holidays_list(day.year)):
+                    logger.info("Loss Cut code: %s" % code)
                     self.trader.sell(code)
         logger.info("***** End Trading *****")
 
-        # calc down rate
+    def calc_down_rate(self):
         total_res = self.sbi.get_total_eval() + self.sbi.get_purchase_margin()
         if self.cnt == 0:
             self.rate_base = total_res
@@ -311,6 +255,23 @@ class TradeManeger:
         logger.info("Res: %d" % self.total_res)
         return self.total_res
 
+    def data_save(self, day, stock_value):
+        f = open("stock_value_%s.dat" % str(day), 'w')
+        cPickle.dump([day, stock_value], f)
+        f.close()
+        f = open("market_indices_%s.dat" % str(day), 'w')
+        indices = dict((idx, self.sbi.get_market_index(idx)) for idx in INDICES)
+        cPickle.dump([day, indices], f)
+        f.close()
+        f = open("quotes_%s.dat" % str(day), 'w')
+        cPickle.dump([day, realtime_quotes()], f)
+        f.close()
+        f = open("market_info_%s.dat" % str(day), 'w')
+        cPickle.dump([self.sbi.get_market_info(i) for i in range(1,8)], f)
+        f.close()
+        f = open("market_news_%s.dat" % str(day), 'w')
+        cPickle.dump(self.sbi.get_market_news(), f)
+        f.close()
 
 def real_trade():
     """
@@ -323,7 +284,7 @@ def real_trade():
     sched = Scheduler()
     sched.start()
 
-    maneger = TradeManeger(USERNAME, PASSWARD, [TM, TMS], simulate=False)
+    maneger = TradeManeger(USERNAME, PASSWARD, simulate=False)
 
     sched.add_cron_job(maneger.trade, day_of_week='mon-fri', hour=7, args=[DOWN_RATE, AVG_VAL, TM, TMS])
     sched.add_cron_job(maneger.get_total_resource, day_of_week='mon-fri', hour=17)
@@ -333,6 +294,9 @@ def view_data(days, data):
     """
     データのグラフ化
     """
+    from matplotlib.dates import  DateFormatter, WeekdayLocator, DayLocator, MONDAY, date2num, num2date
+    from matplotlib.finance import candlestick, plot_day_summary, candlestick2
+
     mondays       = WeekdayLocator(MONDAY)  # major ticks on the mondays
     alldays       = DayLocator()            # minor ticks on the days
     weekFormatter = DateFormatter('%b %d')  # Eg, Jan 12
@@ -357,12 +321,12 @@ def sim_trade(params, graph=True):
     """
     トレードのシミュレーション
     """
-    maneger = TradeManeger(USERNAME, PASSWARD, params[2:4])
+    maneger = TradeManeger(USERNAME, PASSWARD)
     days = []
     data = []
     while maneger.sbi.is_ended() == False:
         maneger.trade(*params)
-        days.append(maneger.sbi.stock_sim.getNowDay())
+        days.append(maneger.sbi.get_today())
         maneger.sbi.step()
         data.append(maneger.get_total_resource())
         evl = float(500000)/data[-1] + 1.0/maneger.get_max_down_rate()

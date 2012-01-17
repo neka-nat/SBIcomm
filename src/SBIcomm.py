@@ -1,6 +1,6 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
-import sys, re
+import sys, re, urllib
 import time, datetime
 import traceback
 import workdays
@@ -50,6 +50,10 @@ CATEGORY = {'SPC':'0', 'STD':'1'}
 
 TODAY_MARKET, USA_MARKET, INDUSTRIES, EMERGING, ATTENTION, FORECAST, MARK= range(1,8)
 
+INDICES = ['nk225', 'nk225f', 'topix', 'jasdaq_average',
+           'jasdaq_index', 'jasdaq_standard', 'jasdaq_growth',
+           'jasdaq_top20', 'j_stock', 'mothers_index', 'jgb_long_future']
+
 # 祝日の設定
 def holidays_list(year):
     equinox = [lambda y:int(20.8431 + 0.242194 * ( y - 1980)) - int((y - 1980)/4),
@@ -84,6 +88,22 @@ def holidays_list(year):
             holidays.append(holiday+datetime.timedelta(days=1))
     return holidays
 
+def realtime_quotes(pair=None):
+    gaitame_url = "http://www.gaitameonline.com/rateaj/getrate"
+    url_data = urllib.urlopen(gaitame_url).read().strip("\r\n")
+    data = eval(url_data)['quotes']
+    res = {}
+    for d in data:
+        res[d['currencyPairCode']] = {'ask':float(d['ask']),
+                                      'bid':float(d['bid']),
+                                      'high':float(d['high']),
+                                      'low':float(d['low']),
+                                      'open':float(d['open'])}
+    if pair is None:
+        return res
+    else:
+        return res[pair]
+
 class SBIcomm:
     """
     SBI証券のサイトをスクレイピングして株価の情報取得やオーダーの送信等のやりとりを行うクラス
@@ -97,9 +117,9 @@ class SBIcomm:
              'market':DOMAIN + "/bsite/market/indexDetail.do",
              'info':DOMAIN + "/bsite/market/marketInfoDetail.do?id=%02d",
              'news':DOMAIN + "/bsite/market/newsList.do?page=%d",
-             'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
-             'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%d&market=TKY&cayen.isStopOrder=%s",
-             'credit':DOMAIN + "/bsite/price/marginDetail.do?ipm_product_code=%d&market=TKY",
+             'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
+             'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
+             'credit':DOMAIN + "/bsite/price/marginDetail.do?ipm_product_code=%s&market=TKY",
              'list':STOCK_DIR + "/orderList.do?cayen.comboOff=1",
              'correct':STOCK_DIR + "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=%s",
              'cancel':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=%s",
@@ -248,6 +268,10 @@ class SBIcomm:
 
     def get_nikkei_avg(self):
         return self.get_market_index()
+
+    def get_usdjpy(self):
+        usdjpy = realtime_quotes("USDJPY")
+        return [usdjpy['open'], usdjpy['ask'], usdjpy['high'], usdjpy['low']]
 
     def get_market_info(self, info_no=TODAY_MARKET):
         """
@@ -477,9 +501,9 @@ class SBIcomm:
 
 if __name__ == "__main__":
     sbi = SBIcomm("hogehoge", "hogehoge")
-    print sbi.buy_order(6758, 100, 1000, inv=True, trigger_price=999)
-    print sbi.get_value(6758)
-    print sbi.get_purchase_margin()
     print sbi.get_total_eval()
     print sbi.get_market_index("j_stock")
     print sbi.get_market_info()
+    #print sbi.buy_order("6758", 100, 1000, inv=True, trigger_price=999)
+    #print sbi.get_value("6758")
+    #print sbi.get_purchase_margin()

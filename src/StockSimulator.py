@@ -1,81 +1,37 @@
 # -*- coding: utf-8 -*-
 #!/usr/bin/env python
+try:
+    import psyco
+    psyco.full()
+except ImportError:
+    pass
 
-import pickle
-import code
+import cPickle, datetime
 from yahoo_finance_jp import OPEN, CLOSE, MAX, MIN, VOLUME, N_DATA
 
-class StockSimulator:
-    def __init__(self, data = None):
-        self.t = 0
-        self.w = 0
-        if not data is None:
-            self.stock_values = data
+f = open("data/stock_data.dat", 'r')
+print "Loading datum..."
+stock_values = cPickle.load(f)
+print "Finish loading datum"
+f.close()
 
-    def load(self, filedir="./"):
-        f = open("stock_data.dat", 'r')
-        print "Loading datum..."
-        self.stock_values = pickle.load(f)
-        print "Finish loading datum"
-        f.close()
+f = open("data/nikkei_avg.dat", 'r')
+print "Loading datum..."
+nikkei_avg = cPickle.load(f)
+print "Finish loading datum"
+f.close()
 
-        f = open("nikkei_avg.dat", 'r')
-        print "Loading datum..."
-        self.nikkei_avg = pickle.load(f)
-        print "Finish loading datum"
-        f.close()
+f = open("data/credit_records.dat", 'r')
+print "Loading datum..."
+credit_records = cPickle.load(f)
+print "Finish loading datum"
+f.close()
 
-        f = open("credit_records.dat", 'r')
-        print "Loading datum..."
-        self.credit_records = pickle.load(f)
-        print "Finish loading datum"
-        f.close()
-
-    def reset(self):
-        self.t = 0
-
-    def goNextDay(self):
-        self.t += 1
-        if self.stock_values[self.t][0] >= self.credit_records[self.w+1][0]:
-            self.w += 1
-
-    def get_value(self, code):
-        if code in self.stock_values[self.t][1]:
-            return self.stock_values[self.t][0], self.stock_values[self.t][1][code]
-        else:
-            return self.stock_values[self.t][0], None
-
-    def getStockValue(self):
-        return self.stock_values[self.t][1]
-
-    def get_credit_record(self, code):
-        if code in self.credit_records[self.w][1]:
-            credit_records = self.credit_records[self.w][1][code]
-            ret = {}
-            ret["unsold"] = [credit_records[0], credit_records[2]]
-            ret["margin"] = [credit_records[1], credit_records[3]]
-            ret["ratio"] = credit_records[4]
-            return ret
-        else:
-            return None
-
-    def getNowDay(self):
-        return self.stock_values[self.t][0]
-
-    def getTomorrow(self):
-        return self.stock_values[self.t+1][0]
-
-    def getNextData(self):
-        return self.stock_values[self.t+1][1]
-
-    def getLastData(self):
-        return self.stock_values[-1][1]
-
-    def isLastDay(self):
-        if self.t >= len(self.stock_values)-1:
-            return True
-        else:
-            return False
+f = open("data/usdjpy.dat", 'r')
+print "Loading datum..."
+usdjpy = cPickle.load(f)
+print "Finish loading datum"
+f.close()
 
 class OrderInfo:
     def __init__(self, code, num, value=None, ordered=False):
@@ -88,19 +44,27 @@ class BrokerSimulator:
     """
     証券会社のシミュレータ
     """
-    def __init__(self, init_res=500000):
+    def __init__(self, init_res=500000, use_data=True):
+        self.t = 0
+        self.w = 0
         self.resource = init_res
-        self.stock_sim = StockSimulator()
-        self.stock_sim.load()
+
+        if use_data == True:
+            self.stock_values = stock_values
+            self.nikkei_avg = nikkei_avg
+            self.credit_records = credit_records
+            self.usdjpy = usdjpy
+
         self.buy_orders = {}
         self.sell_orders = {}
         self.order_num = 0
 
-    def buy_order(self, code, num, order=None):
+    def buy_order(self, code, num, order=None, stock_values=None):
         if num <= 0:
             return None
         margin = self.get_purchase_margin()
-        stock_values = self.stock_sim.getStockValue()
+        if stock_values is None:
+            stock_values = self.stock_values[self.t][1]
         if code in stock_values.keys() and margin > stock_values[code][CLOSE]*num:
             self.buy_orders[self.order_num] = OrderInfo(code, num, stock_values[code][CLOSE])
             self.order_num += 1
@@ -117,34 +81,51 @@ class BrokerSimulator:
                 return self.order_num - 1
         return None
 
-    def get_purchase_margin(self):
+    def get_purchase_margin(self, stock_values=None):
         margin = self.resource
-        stock_values = self.stock_sim.getStockValue()
+        if stock_values is None:
+            stock_values = self.stock_values[self.t][1]
         for key, order in self.buy_orders.items():
             if order.ordered == False and order.code in stock_values.keys():
                 margin -= stock_values[order.code][CLOSE] * order.num
         return margin
 
-    def get_total_eval(self):
+    def get_total_eval(self, stock_values=None):
         total = 0
-        stock_values = self.stock_sim.getStockValue()
+        if stock_values is None:
+            stock_values = self.stock_values[self.t][1]
         for key, order in self.buy_orders.items():
             if order.ordered == True and order.code in stock_values.keys():
                 total += stock_values[order.code][OPEN]*order.num
         return total
 
     def get_value(self, code):
-        return self.stock_sim.get_value(code)
+        if code in self.stock_values[self.t][1].keys():
+            return self.stock_values[self.t][0], self.stock_values[self.t][1][code]
+        else:
+            return self.stock_values[self.t][0], None
 
     def get_nikkei_avg(self):
-        return self.stock_sim.nikkei_avg[self.stock_sim.t][1:5]
+        return self.nikkei_avg[self.t][1:]
+
+    def get_usdjpy(self):
+        return self.usdjpy[self.t][1:]
 
     def get_credit_record(self, code):
-        return self.stock_sim.get_credit_record(code)
+        if code in self.credit_records[self.w][1].keys():
+            return self.credit_records[self.w][1][code]
+        else:
+            return None
 
-    def step(self):
-        self.stock_sim.goNextDay()
-        stock_values = self.stock_sim.getStockValue()
+    def get_today(self):
+        return self.stock_values[self.t][0]
+
+    def step(self, stock_values=None):
+        if stock_values is None:
+            if self.stock_values[self.t][0] >= self.credit_records[self.w][0] + datetime.timedelta(days=7):
+                self.w += 1
+            self.t += 1
+            stock_values = self.stock_values[self.t][1]
 
         print "margin:", self.resource
 
@@ -178,9 +159,10 @@ class BrokerSimulator:
                             del(self.buy_orders[bkey])
                     del(self.sell_orders[skey])
 
-    def get_hold_stock_info(self):
+    def get_hold_stock_info(self, stock_values=None):
         stock_list = {}
-        stock_values = self.stock_sim.getStockValue()
+        if stock_values is None:
+            stock_values = self.stock_values[self.t][1]
         for key, order in self.buy_orders.items():
             if order.code in stock_values.keys() and order.ordered == True:
                 stock_list[order.code] = {"number":order.num,
@@ -188,9 +170,12 @@ class BrokerSimulator:
                                           "gain":stock_values[order.code][CLOSE] - order.value}
         return stock_list
 
-
     def is_ended(self):
-        return self.stock_sim.isLastDay()
+        if self.t >= len(self.stock_values)-1:
+            return True
+        else:
+            return False
 
     def reset(self):
-        self.stock_sim.reset()
+        self.t = 0
+        self.w = 0
