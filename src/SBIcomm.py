@@ -172,10 +172,10 @@ class SBIcomm:
                 br.submit()
                 #time.sleep(self.SLEEP_TIME)
                 break
-            except Exception, error:
+            except:
                 self.logger.info("Open Error! Retry URL Open.")
                 self.logger.info(traceback.format_exc())
-                time.sleep(5)
+                time.sleep(1)
                 cnt += 1
                 if cnt > 3:
                     raise error
@@ -195,10 +195,10 @@ class SBIcomm:
                 br["ipm_product_code"] = str(code)
                 res = br.submit()
                 break
-            except Exception, error:
+            except:
                 self.logger.info("Open Error! Retry URL Open.")
                 self.logger.info(traceback.format_exc())
-                time.sleep(5)
+                time.sleep(1)
                 cnt += 1
                 if cnt > 3:
                     raise error
