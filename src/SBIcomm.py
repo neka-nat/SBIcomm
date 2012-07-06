@@ -6,6 +6,7 @@ import traceback
 import workdays
 from dateutil.relativedelta import *
 import mechanize
+import nltk
 from BeautifulSoup import *
 
 import logging
@@ -49,6 +50,8 @@ ORDER = {'LIM_UNC':' ',   # 指値無条件
 CATEGORY = {'SPC':'0', 'STD':'1'}
 
 TODAY_MARKET, USA_MARKET, INDUSTRIES, EMERGING, ATTENTION, FORECAST, MARK= range(1,8)
+
+OPEN, CLOSE, MAX, MIN, VOLUME, GAIN_LOSS, RATE = range(7)
 
 INDICES = ['nk225', 'nk225f', 'topix', 'jasdaq_average',
            'jasdaq_index', 'jasdaq_standard', 'jasdaq_growth',
@@ -303,9 +306,7 @@ class SBIcomm:
             soup = BeautifulSoup(html)
             lists = soup.findAll("table", width="100%", cellspacing="0", cellpadding="0")
             date = '\n'.join(getNavigableStrings(lists[2].contents[1].find("td").contents[3]))
-            text = '\n'.join(getNavigableStrings(lists[2].contents[1].find("td").contents[4]))
-            text = text.strip()
-            text_list.append([date, text])
+            text_list.append([date, nltk.clean_html(html).replace("\n","")[300:-350]])
             br.close()
 
         return text_list
