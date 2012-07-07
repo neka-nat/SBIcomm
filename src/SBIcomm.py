@@ -62,6 +62,9 @@ MARKET_INDICES = ['nk225', 'nk225f', 'topix', 'jasdaq_average',
 
 # 祝日の設定
 def holidays_list(year):
+    """
+    yearの年の祝日のリストを返す
+    """
     equinox = [lambda y:int(20.8431 + 0.242194 * ( y - 1980)) - int((y - 1980)/4),
                lambda y:int(23.2488 + 0.242194 * ( y - 1980)) - int((y - 1980)/4)]
     holidays = [datetime.date(year, 1, 1),
