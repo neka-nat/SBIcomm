@@ -1,6 +1,6 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
-import sys, re, urllib
+import sys, re
 import time, datetime
 import traceback
 import workdays
@@ -53,9 +53,12 @@ TODAY_MARKET, USA_MARKET, INDUSTRIES, EMERGING, ATTENTION, FORECAST, MARK= range
 
 OPEN, CLOSE, MAX, MIN, VOLUME, GAIN_LOSS, RATE = range(7)
 
-INDICES = ['nk225', 'nk225f', 'topix', 'jasdaq_average',
-           'jasdaq_index', 'jasdaq_standard', 'jasdaq_growth',
-           'jasdaq_top20', 'j_stock', 'mothers_index', 'jgb_long_future']
+MARKET_INDICES = ['nk225', 'nk225f', 'topix', 'jasdaq_average',
+                  'jasdaq_index', 'jasdaq_standard', 'jasdaq_growth',
+                  'jasdaq_top20', 'j_stock', 'mothers_index', 'jgb_long_future',
+                  'ny_dow', 'nasdaq', 'ftse100', 'dax300', 'hk_hansen',
+                  'usd', 'eur', 'gbp', 'aud', 'nzd', 'cad', 'zar', 'chf',
+                  'cny', 'hkd', 'krw', 'sgd', 'mxn']
 
 # 祝日の設定
 def holidays_list(year):
@@ -91,22 +94,6 @@ def holidays_list(year):
             holidays.append(holiday+datetime.timedelta(days=1))
     return holidays
 
-def realtime_quotes(pair=None):
-    gaitame_url = "http://www.gaitameonline.com/rateaj/getrate"
-    url_data = urllib.urlopen(gaitame_url).read().strip("\r\n")
-    data = eval(url_data)['quotes']
-    res = {}
-    for d in data:
-        res[d['currencyPairCode']] = {'ask':float(d['ask']),
-                                      'bid':float(d['bid']),
-                                      'high':float(d['high']),
-                                      'low':float(d['low']),
-                                      'open':float(d['open'])}
-    if pair is None:
-        return res
-    else:
-        return res[pair]
-
 class SBIcomm:
     """
     SBI証券のサイトをスクレイピングして株価の情報取得やオーダーの送信等のやりとりを行うクラス
@@ -120,6 +107,8 @@ class SBIcomm:
              'market':DOMAIN + "/bsite/market/indexDetail.do",
              'info':DOMAIN + "/bsite/market/marketInfoDetail.do?id=%02d",
              'news':DOMAIN + "/bsite/market/newsList.do?page=%d",
+             'foreign':DOMAIN + "/bsite/market/foreignIndexDetail.do",
+             'curr':DOMAIN + "/bsite/market/forexDetail.do",
              'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
              'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
              'credit':DOMAIN + "/bsite/price/marginDetail.do?ipm_product_code=%s&market=TKY",
@@ -131,6 +120,9 @@ class SBIcomm:
 
     ENC = "cp932"
     SLEEP_TIME = 2
+
+    GROUP1_IDX = MARKET_INDICES.index('jgb_long_future') + 1
+    GROUP2_IDX = MARKET_INDICES.index('hk_hansen') + 1
 
     logger = logging.getLogger("mechanize")
     logfile = open("sbicomm.log", 'w')
@@ -247,9 +239,39 @@ class SBIcomm:
         Jストック  : j_stock
         マザーズ指数 : mothers_index
         長期国債先物 : jgb_long_future
+        NYダウ : ny_dow
+        NASDAQ : nasdaq
+        FSTE100 : ftse100
+        DAX30   : dax300
+        香港ハンセン : hk_hansen
+        USドル : usd
+        ユーロ : eur
+        英ポンド : gbp
+        豪ドル : aud
+        NZドル : nzd
+        加ドル : cad
+        南アランド : zar
+        スイスフラン : chf
+        人民元 : cny
+        香港ドル : hkd
+        韓国ウォン : krw
+        SGPドル : sgd
+        メキシコペソ : mxn
         """
-        br = self._browser_open()
-        br.open(self.pages['market'])
+        # index_nameがどのページから見られるかを探す
+        idx = MARKET_INDICES.index(index_name)
+        if idx < self.GROUP1_IDX:
+            kind = 'market'
+        elif idx < self.GROUP2_IDX:
+            kind = 'foreign'
+        else:
+            kind = 'curr'
+
+        if kind == 'market':
+            br = self._browser_open()
+        else:
+            br = self.submit_user_and_pass()
+        br.open(self.pages[kind])
         set_encode(br, self.ENC)
         br.select_form(nr=0)
         br["data_type"] = [index_name]
@@ -260,7 +282,10 @@ class SBIcomm:
         price_list = soup.findAll("table", border="0", cellspacing="2",
                                   cellpadding="0", style="margin-top:5px;")
         l = price_list[0].findAll("font")
-        end_price = float(extract_num(l[0].contents[0]))
+        if kind == 'curr':
+            end_price = float(extract_num(l[0].contents[0].split('-')[0]))
+        else:
+            end_price = float(extract_num(l[0].contents[0]))
         gain_loss = extract_plus_minus_num(l[1].contents[0])
         l = price_list[1].findAll("td")
         start_price = float(extract_num(l[1].contents[0]))
@@ -271,10 +296,6 @@ class SBIcomm:
 
     def get_nikkei_avg(self):
         return self.get_market_index()
-
-    def get_usdjpy(self):
-        usdjpy = realtime_quotes("USDJPY")
-        return [usdjpy['open'], usdjpy['ask'], usdjpy['high'], usdjpy['low']]
 
     def get_market_info(self, info_no=TODAY_MARKET):
         """
