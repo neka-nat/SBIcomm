@@ -37,17 +37,24 @@ def extract_num(string):
 def extract_plus_minus_num(string):
     return eval(string[0] + "1.0") * float(extract_num(string))
 
-COMP = {'MORE':'0', 'LESS':'1'}
-ORDER = {'LIM_UNC':' ',   # 指値無条件
-         'LIM_YORI':'Z',  # 指値寄指
-         'LIM_HIKI':'I',  # 指値引指
-         'LIM_HUSE':'F',  # 指値不成
-         'LIM_IOC':'P',   # 指値IOC
-         'MRK_UNC':'N',   # 成行無条件
-         'MRK_YORI':'Y',  # 成行寄成
-         'MRK_HIKI':'H',  # 成行引成
-         'MRK_IOC':'O'}   # 成行IOC
-CATEGORY = {'SPC':'0', 'STD':'1'}
+class COMP:
+    MORE = '0'
+    LESS = '1'
+
+class ORDER:
+    LIM_UNC = ' '   # 指値無条件
+    LIM_YORI = 'Z'  # 指値寄指
+    LIM_HIKI = 'I'  # 指値引指
+    LIM_HUSE = 'F'  # 指値不成
+    LIM_IOC = 'P'   # 指値IOC
+    MRK_UNC = 'N'   # 成行無条件
+    MRK_YORI = 'Y'  # 成行寄成
+    MRK_HIKI = 'H'  # 成行引成
+    MRK_IOC = 'O'   # 成行IOC
+
+class CATEGORY:
+    SPC = '0'
+    STD = '1'
 
 TODAY_MARKET, USA_MARKET, INDUSTRIES, EMERGING, ATTENTION, FORECAST, MARK= range(1,8)
 
@@ -402,8 +409,8 @@ class SBIcomm:
         records["balance_ratio"] = float(extract_num(l[24].contents[0]))
         return records
 
-    def buy_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
-                  category='SPC', inv=False, comp='MORE', trigger_price=None):
+    def buy_order(self, code, quantity=None, price=None, limit=0, order=ORDER.LIM_UNC,
+                  category=CATEGORY.SPC, inv=False, comp=COMP.MORE, trigger_price=None):
         """
         買注文を行う
         """
@@ -411,14 +418,14 @@ class SBIcomm:
         br.select_form(nr=0)
         self._set_order_propaty(br, quantity, price, limit, order)
         if inv == True:
-            br["trigger_zone"] = [COMP[comp]]
+            br["trigger_zone"] = [comp]
             br["trigger_price"] = str(trigger_price)
-        br["hitokutei_trade_kbn"] = [CATEGORY[category]]
+        br["hitokutei_trade_kbn"] = [category]
         br["password"] = self.password
         return self._confirm(br)
 
-    def sell_order(self, code, quantity=None, price=None, limit=0, order='LIM_UNC',
-                   inv=False, comp='MORE', trigger_price=None):
+    def sell_order(self, code, quantity=None, price=None, limit=0, order=ORDER.LIM_UNC,
+                   inv=False, comp=COMP.MORE, trigger_price=None):
         """
         売注文を行う
         """
@@ -426,7 +433,7 @@ class SBIcomm:
         br.select_form(nr=0)
         self._set_order_propaty(br, quantity, price, limit, order)
         if inv == True:
-            br["trigger_zone"] = [COMP[comp]]
+            br["trigger_zone"] = [comp]
             br["trigger_price"] = str(trigger_price)
         br["password"] = self.password
         return self._confirm(br)
@@ -517,7 +524,7 @@ class SBIcomm:
         else:
             self.logger.info("Cannot setting 6 later working day!")
             raise "Cannot setting 6 later working day!"
-        br["sasinari_kbn"] = [ORDER[order]]
+        br["sasinari_kbn"] = [order]
 
     def _confirm(self, br):
         """
