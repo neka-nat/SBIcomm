@@ -53,12 +53,57 @@ TODAY_MARKET, USA_MARKET, INDUSTRIES, EMERGING, ATTENTION, FORECAST, MARK= range
 
 OPEN, CLOSE, MAX, MIN, VOLUME, GAIN_LOSS, RATE = range(7)
 
-MARKET_INDICES = ['nk225', 'nk225f', 'topix', 'jasdaq_average',
-                  'jasdaq_index', 'jasdaq_standard', 'jasdaq_growth',
-                  'jasdaq_top20', 'j_stock', 'mothers_index', 'jgb_long_future',
-                  'ny_dow', 'nasdaq', 'ftse100', 'dax300', 'hk_hansen',
-                  'usd', 'eur', 'gbp', 'aud', 'nzd', 'cad', 'zar', 'chf',
-                  'cny', 'hkd', 'krw', 'sgd', 'mxn']
+class JP_IDX:
+    nk225 = 'nk225'
+    nk225f = 'nk225f'
+    topix = 'topix'
+    jasdaq_average = 'jasdaq_average'
+    jasdaq_index = 'jasdaq_index'
+    jasdaq_standard = 'jasdaq_standard'
+    jasdaq_growth = 'jasdaq_growth'
+    jasdaq_top20 = 'jasdaq_top20'
+    j_stock = 'j_stock'
+    mothers_index = 'mothers_index'
+    jgb_long_future = 'jgb_long_future'
+
+class FR_IDX:
+    ny_dow = 'ny_dow'
+    nasdaq = 'nasdaq'
+    ftse100 = 'ftse100'
+    dax300 = 'dax300'
+    hk_hansen = 'hk_hansen'
+
+class CURR_IDX:
+    usd = 'usd'
+    eur = 'eur'
+    gbp = 'gbp'
+    aud = 'aud'
+    nzd = 'nzd'
+    cad = 'cad'
+    zar = 'zar'
+    chf = 'chf'
+    cny = 'cny'
+    hkd = 'hkd'
+    krw = 'krw'
+    sgd = 'sgd'
+    mxn = 'mxn'
+
+MARKET_INDICES = []
+MARKET_INDICES.extend(JP_IDX.__dict__.values())
+MARKET_INDICES.extend(FR_IDX.__dict__.values())
+MARKET_INDICES.extend(CURR_IDX.__dict__.values())
+
+def get_indices():
+    """
+    SBI証券から得られるマーケット指標の種類を返す
+    """
+    return MARKET_INDICES
+
+def get_company_code():
+    """
+    東証1部の企業コードを返す
+    """
+    return code.CODE
 
 # 祝日の設定
 def holidays_list(year):
@@ -123,9 +168,6 @@ class SBIcomm:
 
     ENC = "cp932"
     SLEEP_TIME = 2
-
-    GROUP1_IDX = MARKET_INDICES.index('jgb_long_future') + 1
-    GROUP2_IDX = MARKET_INDICES.index('hk_hansen') + 1
 
     logger = logging.getLogger("mechanize")
     logfile = open("sbicomm.log", 'w')
@@ -262,10 +304,9 @@ class SBIcomm:
         メキシコペソ : mxn
         """
         # index_nameがどのページから見られるかを探す
-        idx = MARKET_INDICES.index(index_name)
-        if idx < self.GROUP1_IDX:
+        if index_name in JP_IDX.__dict__.keys():
             kind = 'market'
-        elif idx < self.GROUP2_IDX:
+        elif index_name in FR_IDX.__dict__.keys():
             kind = 'foreign'
         else:
             kind = 'curr'
