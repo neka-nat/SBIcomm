@@ -6,7 +6,6 @@ import traceback
 import workdays
 from dateutil.relativedelta import *
 import mechanize
-import nltk
 from BeautifulSoup import *
 
 import logging
@@ -378,7 +377,11 @@ class SBIcomm:
             soup = BeautifulSoup(html)
             lists = soup.findAll("table", width="100%", cellspacing="0", cellpadding="0")
             date = '\n'.join(getNavigableStrings(lists[2].contents[1].find("td").contents[3]))
-            text_list.append([date, nltk.clean_html(html).replace("\n","")[300:-350]])
+            raw_text = ''.join(BeautifulSoup(html).findAll(text=True, width="100%", cellspacing="0",
+                                                           cellpadding="0")).replace('\n', '')
+            findx = raw_text.find(u"ニュース本文") + len(u"ニュース本文")
+            lindx = raw_text.rfind(u"国内指標ランキング市況コメント")
+            text_list.append([date, raw_text[findx:lindx]])
             br.close()
 
         return text_list
