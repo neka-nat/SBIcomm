@@ -98,6 +98,10 @@ MARKET_INDICES = []
 MARKET_INDICES.extend(JP_IDX.__dict__.values())
 MARKET_INDICES.extend(FR_IDX.__dict__.values())
 MARKET_INDICES.extend(CURR_IDX.__dict__.values())
+while '__main__' in MARKET_INDICES:
+    MARKET_INDICES.remove('__main__')
+while None in MARKET_INDICES:
+    MARKET_INDICES.remove(None)
 
 def get_indices():
     """
@@ -272,7 +276,7 @@ class SBIcomm:
             return date, [start_price, end_price, max_price, min_price, volume,
                           gain_loss, gain_loss/(end_price-gain_loss)]
         except:
-            self.logger.info("Cannot Get Value! %d" % code)
+            self.logger.info("Cannot Get Value! %s" % code)
             self.logger.info(traceback.format_exc())
             return datetime.date.today(), None
 
@@ -336,7 +340,10 @@ class SBIcomm:
             end_price = float(extract_num(l[0].contents[0].split('-')[0]))
         else:
             end_price = float(extract_num(l[0].contents[0]))
-        gain_loss = extract_plus_minus_num(l[1].contents[0])
+        try:
+            gain_loss = extract_plus_minus_num(l[1].contents[0])
+        except IndexError:
+            gain_loss = 0.0
         l = price_list[1].findAll("td")
         start_price = float(extract_num(l[1].contents[0]))
         max_price = float(extract_num(l[3].contents[0]))
@@ -392,24 +399,28 @@ class SBIcomm:
         """
         soup = self._get_soup(self.pages['credit'] % code)
         lists = soup.findAll("table", border="0", cellspacing="0", cellpadding="0")
-        l = lists[5].findAll("td")
         records = {}
-        records["unsold"] = [int(extract_num(l[1].contents[0])), extract_plus_minus_num(l[3].contents[0])]
-        records["margin"] = [int(extract_num(l[5].contents[0])), extract_plus_minus_num(l[7].contents[0])]
-        records["ratio"] = float(records["margin"][0])/float(records["unsold"][0])
+        try:
+            l = lists[5].findAll("td")
+            records["unsold"] = [int(extract_num(l[1].contents[0])), extract_plus_minus_num(l[3].contents[0])]
+            records["margin"] = [int(extract_num(l[5].contents[0])), extract_plus_minus_num(l[7].contents[0])]
+            records["ratio"] = float(records["margin"][0])/float(records["unsold"][0])
         
-        l = lists[6].findAll("td")
-        records["lending_stock"] = {"new":int(extract_num(l[2].contents[0])),
-                                    "repayment":int(extract_num(l[4].contents[0])),
-                                    "balance":int(extract_num(l[6].contents[0])),
-                                    "ratio":extract_plus_minus_num(l[8].contents[0])}
-        records["finance_loan"] = {"new":int(extract_num(l[11].contents[0])),
-                                   "repayment":int(extract_num(l[13].contents[0])),
-                                   "balance":int(extract_num(l[15].contents[0])),
-                                   "ratio":extract_plus_minus_num(l[17].contents[0])}
-        records["diff"] = records["finance_loan"]["balance"] - records["lending_stock"]["balance"]
-        records["diff_ratio"] = extract_plus_minus_num(l[21].contents[0])
-        records["balance_ratio"] = float(extract_num(l[24].contents[0]))
+            l = lists[6].findAll("td")
+            records["lending_stock"] = {"new":int(extract_num(l[2].contents[0])),
+                                        "repayment":int(extract_num(l[4].contents[0])),
+                                        "balance":int(extract_num(l[6].contents[0])),
+                                        "ratio":extract_plus_minus_num(l[8].contents[0])}
+            records["finance_loan"] = {"new":int(extract_num(l[11].contents[0])),
+                                       "repayment":int(extract_num(l[13].contents[0])),
+                                       "balance":int(extract_num(l[15].contents[0])),
+                                       "ratio":extract_plus_minus_num(l[17].contents[0])}
+            records["diff"] = records["finance_loan"]["balance"] - records["lending_stock"]["balance"]
+            records["diff_ratio"] = extract_plus_minus_num(l[21].contents[0])
+            records["balance_ratio"] = float(extract_num(l[24].contents[0]))
+        except:
+            self.logger.info("Cannot Get Value! %s" % code)
+            self.logger.info(traceback.format_exc())
         return records
 
     def buy_order(self, code, quantity=None, price=None, limit=0, order=ORDER.LIM_UNC,

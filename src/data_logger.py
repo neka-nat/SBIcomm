@@ -27,12 +27,11 @@ class DataLogger:
         self.credit_records = {}
 
     def logging(self):
-        if self.simulate == False:
-            today = datetime.date.today()
-            # 祝日はトレードできない
-            if today in holidays_list(today.year):
-                logger.info("Today is holiday! : " + str(today))
-                return
+        today = datetime.date.today()
+        # 祝日はトレードできない
+        if today in holidays_list(today.year):
+            logger.info("Today is holiday! : " + str(today))
+            return
 
         stock_value = {}
         for code in CODE.values():
@@ -49,7 +48,7 @@ class DataLogger:
                 if not rec is None:
                     self.credit_records[code] = rec
 
-            f = open("%scredit_records_%s.dat" % (save_dir, str(day)), 'w')
+            f = open("%scredit_records_%s.dat" % (self.save_dir, str(day)), 'w')
             cPickle.dump(self.credit_records, f)
             f.close()
 
@@ -57,17 +56,17 @@ class DataLogger:
         self.data_save(day, stock_value)
 
     def data_save(self, day, stock_value):
-        f = open("%sstock_value_%s.dat" % (save_dir, str(day)), 'w')
+        f = open("%sstock_value_%s.dat" % (self.save_dir, str(day)), 'w')
         cPickle.dump([day, stock_value], f)
         f.close()
-        f = open("%smarket_indices_%s.dat" % (save_dir, str(day)), 'w')
+        f = open("%smarket_indices_%s.dat" % (self.save_dir, str(day)), 'w')
         indices = dict((idx, self.sbi.get_market_index(idx)) for idx in MARKET_INDICES)
         cPickle.dump([day, indices], f)
         f.close()
-        f = open("%smarket_info_%s.dat" % (save_dir, str(day)), 'w')
+        f = open("%smarket_info_%s.dat" % (self.save_dir, str(day)), 'w')
         cPickle.dump([self.sbi.get_market_info(i) for i in range(1,8)], f)
         f.close()
-        f = open("%smarket_news_%s.dat" % (save_dir, str(day)), 'w')
+        f = open("%smarket_news_%s.dat" % (self.save_dir, str(day)), 'w')
         cPickle.dump(self.sbi.get_market_news(), f)
         f.close()
 
