@@ -95,13 +95,13 @@ class CURR_IDX:
     mxn = 'mxn'
 
 MARKET_INDICES = []
-MARKET_INDICES.extend(JP_IDX.__dict__.values())
-MARKET_INDICES.extend(FR_IDX.__dict__.values())
-MARKET_INDICES.extend(CURR_IDX.__dict__.values())
-while '__main__' in MARKET_INDICES:
-    MARKET_INDICES.remove('__main__')
-while None in MARKET_INDICES:
-    MARKET_INDICES.remove(None)
+MARKET_INDICES.extend(JP_IDX.__dict__.keys())
+MARKET_INDICES.extend(FR_IDX.__dict__.keys())
+MARKET_INDICES.extend(CURR_IDX.__dict__.keys())
+while '__module__' in MARKET_INDICES:
+    MARKET_INDICES.remove('__module__')
+while '__doc__' in MARKET_INDICES:
+    MARKET_INDICES.remove('__doc__')
 
 def get_indices():
     """
@@ -336,18 +336,22 @@ class SBIcomm:
         price_list = soup.findAll("table", border="0", cellspacing="2",
                                   cellpadding="0", style="margin-top:5px;")
         l = price_list[0].findAll("font")
-        if kind == 'curr':
-            end_price = float(extract_num(l[0].contents[0].split('-')[0]))
-        else:
-            end_price = float(extract_num(l[0].contents[0]))
         try:
-            gain_loss = extract_plus_minus_num(l[1].contents[0])
-        except IndexError:
-            gain_loss = 0.0
-        l = price_list[1].findAll("td")
-        start_price = float(extract_num(l[1].contents[0]))
-        max_price = float(extract_num(l[3].contents[0]))
-        min_price = float(extract_num(l[5].contents[0]))
+            if kind == 'curr':
+                end_price = float(extract_num(l[0].contents[0].split('-')[0]))
+            else:
+                end_price = float(extract_num(l[0].contents[0]))
+            try:
+                gain_loss = extract_plus_minus_num(l[1].contents[0])
+            except IndexError:
+                gain_loss = 0.0
+            l = price_list[1].findAll("td")
+            start_price = float(extract_num(l[1].contents[0]))
+            max_price = float(extract_num(l[3].contents[0]))
+            min_price = float(extract_num(l[5].contents[0]))
+        except:
+            self.logger.info("Cannot Get Value! %s" % index_name)
+            self.logger.info(traceback.format_exc())
         return [start_price, end_price, max_price, min_price,
                 gain_loss, gain_loss/(end_price-gain_loss)]
 

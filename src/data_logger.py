@@ -78,9 +78,9 @@ def logging_main():
     sched = Scheduler()
     sched.start()
 
-    maneger = DataLogger(USERNAME, PASSWARD)
+    manager = DataLogger(USERNAME, PASSWARD)
 
-    sched.add_cron_job(maneger.logging, day_of_week='mon-fri', hour=7)
+    sched.add_cron_job(manager.logging, day_of_week='mon-fri', hour=7)
     signal.pause()
 
 if __name__ == "__main__":
