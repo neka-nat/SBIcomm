@@ -349,11 +349,11 @@ class SBIcomm:
             start_price = float(extract_num(l[1].contents[0]))
             max_price = float(extract_num(l[3].contents[0]))
             min_price = float(extract_num(l[5].contents[0]))
+            return [start_price, end_price, max_price, min_price,
+                    gain_loss, gain_loss/(end_price-gain_loss)]
         except:
             self.logger.info("Cannot Get Value! %s" % index_name)
             self.logger.info(traceback.format_exc())
-        return [start_price, end_price, max_price, min_price,
-                gain_loss, gain_loss/(end_price-gain_loss)]
 
     def get_nikkei_avg(self):
         return self.get_market_index()
