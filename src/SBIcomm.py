@@ -31,10 +31,17 @@ def getNavigableStrings(soup):
 
 pat = re.compile(r'\d+\.*')
 def extract_num(string):
-    return "".join(pat.findall(string))
+    if string == "-":
+        return "None"
+    else:
+        return "".join(pat.findall(string))
 
 def extract_plus_minus_num(string):
-    return eval(string[0] + "1.0") * float(extract_num(string))
+    num = eval(extract_num(string))
+    if num is None:
+        return None
+    else:
+        return eval(string[0] + "1.0") * float(num)
 
 class COMP:
     MORE = '0'
@@ -406,22 +413,28 @@ class SBIcomm:
         records = {}
         try:
             l = lists[5].findAll("td")
-            records["unsold"] = [int(extract_num(l[1].contents[0])), extract_plus_minus_num(l[3].contents[0])]
-            records["margin"] = [int(extract_num(l[5].contents[0])), extract_plus_minus_num(l[7].contents[0])]
-            records["ratio"] = float(records["margin"][0])/float(records["unsold"][0])
+            records["unsold"] = [eval(extract_num(l[1].contents[0])), extract_plus_minus_num(l[3].contents[0])]
+            records["margin"] = [eval(extract_num(l[5].contents[0])), extract_plus_minus_num(l[7].contents[0])]
+            if records["unsold"][0] is None or records["margin"][0] is None:
+                records["ratio"] = None
+            else:
+                records["ratio"] = float(records["margin"][0])/float(records["unsold"][0])
         
             l = lists[6].findAll("td")
-            records["lending_stock"] = {"new":int(extract_num(l[2].contents[0])),
-                                        "repayment":int(extract_num(l[4].contents[0])),
-                                        "balance":int(extract_num(l[6].contents[0])),
+            records["lending_stock"] = {"new":eval(extract_num(l[2].contents[0])),
+                                        "repayment":eval(extract_num(l[4].contents[0])),
+                                        "balance":eval(extract_num(l[6].contents[0])),
                                         "ratio":extract_plus_minus_num(l[8].contents[0])}
-            records["finance_loan"] = {"new":int(extract_num(l[11].contents[0])),
-                                       "repayment":int(extract_num(l[13].contents[0])),
-                                       "balance":int(extract_num(l[15].contents[0])),
+            records["finance_loan"] = {"new":eval(extract_num(l[11].contents[0])),
+                                       "repayment":eval(extract_num(l[13].contents[0])),
+                                       "balance":eval(extract_num(l[15].contents[0])),
                                        "ratio":extract_plus_minus_num(l[17].contents[0])}
-            records["diff"] = records["finance_loan"]["balance"] - records["lending_stock"]["balance"]
+            if records["finance_loan"]["balance"] is None or records["lending_stock"]["balance"] is None:
+                records["diff"] = None
+            else:
+                records["diff"] = records["finance_loan"]["balance"] - records["lending_stock"]["balance"]
             records["diff_ratio"] = extract_plus_minus_num(l[21].contents[0])
-            records["balance_ratio"] = float(extract_num(l[24].contents[0]))
+            records["balance_ratio"] = eval(extract_num(l[24].contents[0]))
         except:
             self.logger.info("Cannot Get Value! %s" % code)
             self.logger.info(traceback.format_exc())
