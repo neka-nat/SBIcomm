@@ -1,15 +1,14 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
-import sys, re
-import time, datetime
+import sys
+import re
+import time
+import datetime
 import traceback
 import workdays
 from dateutil.relativedelta import *
 import mechanize
 from BeautifulSoup import *
-
-import logging
-import copy
 
 def set_encode(br, enc):
     """
@@ -20,25 +19,33 @@ def set_encode(br, enc):
     br._factory._forms_factory.encoding = enc
     br._factory._links_factory._encoding = enc
 
+
 def getNavigableStrings(soup):
-  if isinstance(soup, NavigableString):
-    if type(soup) not in (Comment, Declaration) and soup.strip():
-      yield soup
-  elif soup.name not in ('script', 'style'):
-    for c in soup.contents:
-      for g in getNavigableStrings(c):
-        yield g
+    if isinstance(soup, NavigableString):
+        if type(soup) not in (Comment, Declaration) and soup.strip():
+            yield soup
+    elif soup.name not in ('script', 'style'):
+        for c in soup.contents:
+            for g in getNavigableStrings(c):
+                yield g
 
 pat = re.compile(r'\d+\.*')
+
+
 def extract_num(string):
     return "".join(pat.findall(string))
+
 
 def extract_plus_minus_num(string):
     return eval(string[0] + "1.0") * float(extract_num(string))
 
+
 class COMP:
     MORE = '0'
     LESS = '1'
+    def __init__(self):
+        pass
+
 
 class ORDER:
     LIM_UNC = ' '   # 指値無条件
@@ -50,14 +57,21 @@ class ORDER:
     MRK_YORI = 'Y'  # 成行寄成
     MRK_HIKI = 'H'  # 成行引成
     MRK_IOC = 'O'   # 成行IOC
+    def __init__(self):
+        pass
+
 
 class CATEGORY:
     SPC = '0'
     STD = '1'
+    def __init__(self):
+        pass
 
-TODAY_MARKET, USA_MARKET, INDUSTRIES, EMERGING, ATTENTION, FORECAST, MARK= range(1,8)
+TODAY_MARKET, USA_MARKET, INDUSTRIES, \
+EMERGING, ATTENTION, FORECAST, MARK = range(1, 8)
 
 OPEN, CLOSE, MAX, MIN, VOLUME, GAIN_LOSS, RATE = range(7)
+
 
 class JP_IDX:
     nk225 = 'nk225'
@@ -71,6 +85,9 @@ class JP_IDX:
     j_stock = 'j_stock'
     mothers_index = 'mothers_index'
     jgb_long_future = 'jgb_long_future'
+    def __init__(self):
+        pass
+
 
 class FR_IDX:
     ny_dow = 'ny_dow'
@@ -78,6 +95,9 @@ class FR_IDX:
     ftse100 = 'ftse100'
     dax300 = 'dax300'
     hk_hansen = 'hk_hansen'
+    def __init__(self):
+        pass
+
 
 class CURR_IDX:
     usd = 'usd'
@@ -93,6 +113,8 @@ class CURR_IDX:
     krw = 'krw'
     sgd = 'sgd'
     mxn = 'mxn'
+    def __init__(self):
+        pass
 
 MARKET_INDICES = []
 MARKET_INDICES.extend(JP_IDX.__dict__.keys())
@@ -103,54 +125,57 @@ while '__module__' in MARKET_INDICES:
 while '__doc__' in MARKET_INDICES:
     MARKET_INDICES.remove('__doc__')
 
+
 def get_indices():
     """
     SBI証券から得られるマーケット指標の種類を返す
     """
     return MARKET_INDICES
 
-def get_company_code():
-    """
-    東証1部の企業コードを返す
-    """
-    return code.CODE
 
 # 祝日の設定
 def holidays_list(year):
     """
     yearの年の祝日のリストを返す
     """
-    equinox = [lambda y:int(20.8431 + 0.242194 * ( y - 1980)) - int((y - 1980)/4),
-               lambda y:int(23.2488 + 0.242194 * ( y - 1980)) - int((y - 1980)/4)]
+    equinox = [lambda y:int(20.8431 + 0.242194 * (y - 1980)) \
+                   - int((y - 1980) / 4),
+               lambda y:int(23.2488 + 0.242194 * (y - 1980)) \
+                   - int((y - 1980) / 4)]
     holidays = [datetime.date(year, 1, 1),
                 datetime.date(year, 1, 2),
                 datetime.date(year, 1, 3),
-                datetime.date(year, 1, 1) + relativedelta(weekday=MO(+2)), # 成人の日
-                datetime.date(year, 2, 11), # 建国記念日
-                datetime.date(year, 3, equinox[0](year)), # 春分の日
-                datetime.date(year, 4, 29), # 昭和の日
-                datetime.date(year, 5, 3),  # 憲法記念日
-                datetime.date(year, 5, 4),  # みどりの日
-                datetime.date(year, 5, 5),  # こどもの日
-                datetime.date(year, 7, 1) + relativedelta(weekday=MO(+3)), # 海の日
-                datetime.date(year, 9, 1) + relativedelta(weekday=MO(+3)), # 敬老の日
-                datetime.date(year, 9, equinox[1](year)), # 秋分の日
-                datetime.date(year, 10, 1) + relativedelta(weekday=MO(+2)),# 体育の日
-                datetime.date(year, 11, 3), # 文化の日
-                datetime.date(year, 11, 23),# 勤労感謝の日
-                datetime.date(year, 12, 23),# 天皇誕生日
+                datetime.date(year, 1, 1) \
+                    + relativedelta(weekday=MO(+ 2)),  # 成人の日
+                datetime.date(year, 2, 11),  # 建国記念日
+                datetime.date(year, 3, equinox[0](year)),  # 春分の日
+                datetime.date(year, 4, 29),  # 昭和の日
+                datetime.date(year, 5, 3),   # 憲法記念日
+                datetime.date(year, 5, 4),   # みどりの日
+                datetime.date(year, 5, 5),   # こどもの日
+                datetime.date(year, 7, 1) \
+                    + relativedelta(weekday=MO(+3)),  # 海の日
+                datetime.date(year, 9, 1) \
+                    + relativedelta(weekday=MO(+3)),  # 敬老の日
+                datetime.date(year, 9, equinox[1](year)),  # 秋分の日
+                datetime.date(year, 10, 1) \
+                    + relativedelta(weekday=MO(+2)),  # 体育の日
+                datetime.date(year, 11, 3),   # 文化の日
+                datetime.date(year, 11, 23),  # 勤労感謝の日
+                datetime.date(year, 12, 23),  # 天皇誕生日
                 datetime.date(year, 12, 29),
                 datetime.date(year, 12, 30),
                 datetime.date(year, 12, 31),
-                datetime.date(year+1, 1, 1),
-                datetime.date(year+1, 1, 2),
-                datetime.date(year+1, 1, 3)]
+                datetime.date(year + 1, 1, 1),
+                datetime.date(year + 1, 1, 2),
+                datetime.date(year + 1, 1, 3)]
 
     # 振替休日の追加
     for holiday in holidays:
         if holiday.weekday() == 6:
-            holidays.append(holiday+datetime.timedelta(days=1))
+            holidays.append(holiday + datetime.timedelta(days=1))
     return holidays
+
 
 class SBIcomm:
     """
@@ -160,46 +185,44 @@ class SBIcomm:
     DOMAIN = "https://k.sbisec.co.jp"
     STOCK_DIR = DOMAIN + "/bsite/member/stock"
     ACC_DIR = DOMAIN + "/bsite/member/acc"
-    pages = {'top':DOMAIN + "/bsite/visitor/top.do",
-             'search':DOMAIN + "/bsite/price/search.do",
-             'market':DOMAIN + "/bsite/market/indexDetail.do",
-             'info':DOMAIN + "/bsite/market/marketInfoDetail.do?id=%02d",
-             'news':DOMAIN + "/bsite/market/newsList.do?page=%d",
-             'foreign':DOMAIN + "/bsite/market/foreignIndexDetail.do",
-             'curr':DOMAIN + "/bsite/market/forexDetail.do",
-             'buy':STOCK_DIR + "/buyOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
-             'sell':STOCK_DIR + "/sellOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
-             'credit':DOMAIN + "/bsite/price/marginDetail.do?ipm_product_code=%s&market=TKY",
-             'list':STOCK_DIR + "/orderList.do?cayen.comboOff=1",
-             'correct':STOCK_DIR + "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=%s",
-             'cancel':STOCK_DIR + "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=%s",
+    pages = {'top': DOMAIN + "/bsite/visitor/top.do",
+             'search': DOMAIN + "/bsite/price/search.do",
+             'market': DOMAIN + "/bsite/market/indexDetail.do",
+             'info': DOMAIN + "/bsite/market/marketInfoDetail.do?id=%02d",
+             'news': DOMAIN + "/bsite/market/newsList.do?page=%d",
+             'foreign': DOMAIN + "/bsite/market/foreignIndexDetail.do",
+             'curr': DOMAIN + "/bsite/market/forexDetail.do",
+             'buy': STOCK_DIR + \
+                 "/buyOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
+             'sell': STOCK_DIR + \
+                 "/sellOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
+             'credit': DOMAIN + \
+                 "/bsite/price/marginDetail.do?ipm_product_code=%s&market=TKY",
+             'list': STOCK_DIR + \
+                 "/orderList.do?cayen.comboOff=1",
+             'correct': STOCK_DIR + \
+                 "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=%s",
+             'cancel': STOCK_DIR + \
+                 "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=%s",
              'schedule':ACC_DIR + "/stockClearingScheduleList.do",
              'manege':ACC_DIR + "/holdStockList.do"}
 
     ENC = "cp932"
-    SLEEP_TIME = 2
-
-    logger = logging.getLogger("mechanize")
-    logfile = open("sbicomm.log", 'w')
-    logger.addHandler(logging.StreamHandler(logfile))
-    logger.addHandler(logging.StreamHandler(sys.stdout))
-
-    logger.setLevel(logging.INFO)
 
     def __init__(self, username=None, password=None,
                  proxy=None, proxy_user=None, proxy_password=None):
-        self.username = username
-        self.password = password
-        self.proxy          = proxy
-        self.proxy_user     = proxy_user
-        self.proxy_password = proxy_password
+        self._username = username
+        self._password = password
+        self._proxy = proxy
+        self._proxy_user = proxy_user
+        self._proxy_password = proxy_password
 
     def _browser_open(self):
         br = mechanize.Browser()
         br.set_handle_robots(False)
-        if not self.proxy is None:
-            br.set_proxies(self.proxy)
-            br.add_proxy_password(self.proxy_user, self.proxy_password)
+        if not self._proxy is None:
+            br.set_proxies(self._proxy)
+            br.add_proxy_password(self._proxy_user, self._proxy_password)
 
         #br.set_debug_http(True)
         #br.set_debug_redirects(True)
@@ -210,59 +233,39 @@ class SBIcomm:
         """
         トップページにユーザー名とパスワードを送信
         """
-        cnt = 0
         br = self._browser_open()
-        while True:
-            try:
-                br.open(self.pages['top'])
-                set_encode(br, self.ENC)
-                br.select_form(name="form1")
-                br["username"] = self.username
-                br["password"] = self.password
-                br.submit()
-                #time.sleep(self.SLEEP_TIME)
-                break
-            except:
-                self.logger.info("Open Error! Retry URL Open.")
-                self.logger.info(traceback.format_exc())
-                time.sleep(1)
-                cnt += 1
-                if cnt > 3:
-                    raise error
+        br.open(self.pages['top'])
+        set_encode(br, self.ENC)
+        br.select_form(name="form1")
+        br["username"] = self._username
+        br["password"] = self._password
+        br.submit()
         return br
 
     def get_value(self, code):
         """
         現在の日付、株価を返す
         """
-        cnt = 0
         br = self._browser_open()
-        while True:
-            try:
-                res = br.open(self.pages['search'])
-                set_encode(br, self.ENC)
-                br.select_form(nr=0)
-                br["ipm_product_code"] = str(code)
-                res = br.submit()
-                break
-            except:
-                self.logger.info("Open Error! Retry URL Open.")
-                self.logger.info(traceback.format_exc())
-                time.sleep(1)
-                cnt += 1
-                if cnt > 3:
-                    raise error
+        res = br.open(self.pages['search'])
+        set_encode(br, self.ENC)
+        br.select_form(nr=0)
+        br["ipm_product_code"] = str(code)
+        res = br.submit()
+
         # 取得したhtmlを解析して日付と価格を求める
         html = res.read().decode(self.ENC)
         soup = BeautifulSoup(html)
         price_list = soup.findAll("tr", valign="top")
         try:
             cnt = 1 if price_list[2].find("font") is None else 0
-            end_price = float(extract_num(price_list[2+cnt].find("font").contents[0]))
-            num = price_list[3+cnt].find("font")
-            m = [pat.findall(price_list[i+cnt].findAll("td", align="right")[0].contents[0].replace(",",""))[0] for i in range(4,7)]
-            volume = int(extract_num(price_list[4+cnt].findAll("td", align="right")[1].contents[0]))
-            num_list = pat.findall(price_list[2+cnt].findAll("td")[1].contents[1])
+            num = price_list[2 + cnt].find("font")
+            end_price = float(extract_num(num.contents[0]))
+            num = price_list[3 + cnt].find("font")
+            m = [pat.findall(price_list[i + cnt].findAll("td", align="right")[0].contents[0].replace(",",""))[0] \
+                     for i in range(4,7)]
+            volume = int(extract_num(price_list[4 + cnt].findAll("td", align="right")[1].contents[0]))
+            num_list = pat.findall(price_list[2 + cnt].findAll("td")[1].contents[1])
             if num is None:
                 gain_loss = 0.0
             else:
@@ -274,44 +277,15 @@ class SBIcomm:
             # 日付の取得
             date = datetime.date(datetime.date.today().year, int(num_list[0]), int(num_list[1]))
             return date, [start_price, end_price, max_price, min_price, volume,
-                          gain_loss, gain_loss/(end_price-gain_loss)]
+                          gain_loss, gain_loss / (end_price - gain_loss)]
         except:
-            self.logger.info("Cannot Get Value! %s" % code)
-            self.logger.info(traceback.format_exc())
+            print traceback.format_exc()
+            print "Cannot Get Value! %s" % code
             return datetime.date.today(), None
 
     def get_market_index(self, index_name='nk225'):
         """
         市場の指標を返す
-        日経平均    : nk225
-        日経平均先物 : nk225f
-        TOPIX     : topix
-        JASDAQ平均 : jasdaq_average
-        JASDAQ指数 : jasdaq_index
-        JASDAQ・S指数 : jasdaq_standard
-        JASDAQ・G指数 : jasdaq_growth
-        JQ-TOP20 : jasdaq_top20
-        Jストック  : j_stock
-        マザーズ指数 : mothers_index
-        長期国債先物 : jgb_long_future
-        NYダウ : ny_dow
-        NASDAQ : nasdaq
-        FSTE100 : ftse100
-        DAX30   : dax300
-        香港ハンセン : hk_hansen
-        USドル : usd
-        ユーロ : eur
-        英ポンド : gbp
-        豪ドル : aud
-        NZドル : nzd
-        加ドル : cad
-        南アランド : zar
-        スイスフラン : chf
-        人民元 : cny
-        香港ドル : hkd
-        韓国ウォン : krw
-        SGPドル : sgd
-        メキシコペソ : mxn
         """
         # index_nameがどのページから見られるかを探す
         if index_name in JP_IDX.__dict__.keys():
@@ -350,10 +324,11 @@ class SBIcomm:
             max_price = float(extract_num(l[3].contents[0]))
             min_price = float(extract_num(l[5].contents[0]))
             return [start_price, end_price, max_price, min_price,
-                    gain_loss, gain_loss/(end_price-gain_loss)]
+                    gain_loss, gain_loss / (end_price - gain_loss)]
         except:
-            self.logger.info("Cannot Get Value! %s" % index_name)
-            self.logger.info(traceback.format_exc())
+            print traceback.format_exc()
+            print "Cannot Get Value! %s" % index_name
+            return [None, None, None, None, None, None]
 
     def get_nikkei_avg(self):
         return self.get_market_index()
@@ -364,7 +339,8 @@ class SBIcomm:
         """
         soup = self._get_soup(self.pages['info'] % info_no)
         text_list = soup.findAll("table", border="0", cellspacing="0",
-                                 cellpadding="0", width="100%", style="margin-top:10px;")
+                                 cellpadding="0", width="100%",
+                                 style="margin-top:10px;")
         return '\n'.join(getNavigableStrings(text_list[1]))
 
     def get_market_news(self):
@@ -386,9 +362,12 @@ class SBIcomm:
             res = br.open(url)
             html = res.read().decode(self.ENC)
             soup = BeautifulSoup(html)
-            lists = soup.findAll("table", width="100%", cellspacing="0", cellpadding="0")
+            lists = soup.findAll("table", width="100%",
+                                 cellspacing="0", cellpadding="0")
             date = '\n'.join(getNavigableStrings(lists[2].contents[1].find("td").contents[3]))
-            raw_text = ''.join(BeautifulSoup(html).findAll(text=True, width="100%", cellspacing="0",
+            raw_text = ''.join(BeautifulSoup(html).findAll(text=True,
+                                                           width="100%",
+                                                           cellspacing="0",
                                                            cellpadding="0")).replace('\n', '')
             findx = raw_text.find(u"ニュース本文") + len(u"ニュース本文")
             lindx = raw_text.rfind(u"国内指標ランキング市況コメント")
@@ -402,33 +381,38 @@ class SBIcomm:
         企業の信用情報を取得する
         """
         soup = self._get_soup(self.pages['credit'] % code)
-        lists = soup.findAll("table", border="0", cellspacing="0", cellpadding="0")
+        lists = soup.findAll("table", border="0",
+                             cellspacing="0", cellpadding="0")
         records = {}
         try:
             l = lists[5].findAll("td")
-            records["unsold"] = [int(extract_num(l[1].contents[0])), extract_plus_minus_num(l[3].contents[0])]
-            records["margin"] = [int(extract_num(l[5].contents[0])), extract_plus_minus_num(l[7].contents[0])]
-            records["ratio"] = float(records["margin"][0])/float(records["unsold"][0])
-        
+            records["unsold"] = [int(extract_num(l[1].contents[0])),
+                                 extract_plus_minus_num(l[3].contents[0])]
+            records["margin"] = [int(extract_num(l[5].contents[0])),
+                                 extract_plus_minus_num(l[7].contents[0])]
+            records["ratio"] = float(records["margin"][0]) / float(records["unsold"][0])
+
             l = lists[6].findAll("td")
-            records["lending_stock"] = {"new":int(extract_num(l[2].contents[0])),
-                                        "repayment":int(extract_num(l[4].contents[0])),
-                                        "balance":int(extract_num(l[6].contents[0])),
-                                        "ratio":extract_plus_minus_num(l[8].contents[0])}
-            records["finance_loan"] = {"new":int(extract_num(l[11].contents[0])),
-                                       "repayment":int(extract_num(l[13].contents[0])),
-                                       "balance":int(extract_num(l[15].contents[0])),
-                                       "ratio":extract_plus_minus_num(l[17].contents[0])}
+            records["lending_stock"] = {"new": int(extract_num(l[2].contents[0])),
+                                        "repayment": int(extract_num(l[4].contents[0])),
+                                        "balance": int(extract_num(l[6].contents[0])),
+                                        "ratio": extract_plus_minus_num(l[8].contents[0])}
+            records["finance_loan"] = {"new": int(extract_num(l[11].contents[0])),
+                                       "repayment": int(extract_num(l[13].contents[0])),
+                                       "balance": int(extract_num(l[15].contents[0])),
+                                       "ratio": extract_plus_minus_num(l[17].contents[0])}
             records["diff"] = records["finance_loan"]["balance"] - records["lending_stock"]["balance"]
             records["diff_ratio"] = extract_plus_minus_num(l[21].contents[0])
             records["balance_ratio"] = float(extract_num(l[24].contents[0]))
         except:
-            self.logger.info("Cannot Get Value! %s" % code)
-            self.logger.info(traceback.format_exc())
+            print traceback.format_exc()
+            print "Cannot Get Value! %s" % code
         return records
 
-    def buy_order(self, code, quantity=None, price=None, limit=0, order=ORDER.LIM_UNC,
-                  category=CATEGORY.SPC, inv=False, comp=COMP.MORE, trigger_price=None):
+    def buy_order(self, code, quantity=None, price=None,
+                  limit=0, order=ORDER.LIM_UNC,
+                  category=CATEGORY.SPC, inv=False,
+                  comp=COMP.MORE, trigger_price=None):
         """
         買注文を行う
         """
@@ -442,7 +426,8 @@ class SBIcomm:
         br["password"] = self.password
         return self._confirm(br)
 
-    def sell_order(self, code, quantity=None, price=None, limit=0, order=ORDER.LIM_UNC,
+    def sell_order(self, code, quantity=None, price=None,
+                   limit=0, order=ORDER.LIM_UNC,
                    inv=False, comp=COMP.MORE, trigger_price=None):
         """
         売注文を行う
@@ -471,15 +456,18 @@ class SBIcomm:
         """
         soup = self._get_soup(self.pages['correct'] % order_num)
         try:
-            l = soup.find("form", action="/bsite/member/stock/orderCorrectEntry.do", method="POST")
+            l = soup.find("form",
+                          action="/bsite/member/stock/orderCorrectEntry.do",
+                          method="POST")
             code = int(extract_num(l.find("td").contents[0].contents[0]))
-            l = soup.find("form", action="/bsite/member/stock/orderCorrectConfirm.do", method="POST")
+            l = soup.find("form",
+                          action="/bsite/member/stock/orderCorrectConfirm.do",
+                          method="POST")
             state = l.findAll("td")[1].contents[0]
             n_order = int(extract_num(l.findAll("td")[3].contents[0]))
-            return {'code':code, 'number':n_order, 'state':state}
+            return {'code': code, 'number': n_order, 'state': state}
         except:
-            self.logger.info(traceback.format_exc())
-            raise "Cannot get info!", order_num
+            raise ValueError, "Cannot get info %d!" % order_num
 
     def get_purchase_margin(self, wday_step=0):
         """
@@ -494,14 +482,16 @@ class SBIcomm:
         現在の所持している株の情報を取得
         """
         soup = self._get_soup(self.pages['manege'])
-        lists = soup.find("table", border="0", cellspacing="1", cellpadding="2", width="100%", bgcolor="#7E7ECC").findAll("tr")
+        lists = soup.find("table", border="0",
+                          cellspacing="1", cellpadding="2",
+                          width="100%", bgcolor="#7E7ECC").findAll("tr")
         stock_list = {}
         for l0, l1, l2 in zip(lists[0::3], lists[1::3], lists[2::3]):
             val_str = l2.contents[7].contents[0].contents[0]
             code = int(extract_num(l0.contents[0].contents[0]))
-            stock_list[code] = {"number":int(extract_num(l1.contents[7].contents[0])),
-                                "value":int(extract_num(l1.contents[3].contents[0])),
-                                "gain":eval(val_str[0]+"1")*int(extract_num(val_str))}
+            stock_list[code] = {"number": int(extract_num(l1.contents[7].contents[0])),
+                                "value": int(extract_num(l1.contents[3].contents[0])),
+                                "gain": eval(val_str[0] + "1")*int(extract_num(val_str))}
         return stock_list
 
     def get_total_eval(self):
@@ -509,12 +499,10 @@ class SBIcomm:
         現在の評価合計を取得する
         """
         soup = self._get_soup(self.pages['manege'])
-        lists = soup.findAll("table", border="0", cellspacing="1", cellpadding="2", width="100%")
-        try:
-            return int(extract_num(lists[0].findAll("td")[1].contents[0]))
-        except:
-            self.logger.info(traceback.format_exc())
-            raise "Cannot Get Total Evaluate!"
+        lists = soup.findAll("table", border="0",
+                             cellspacing="1", cellpadding="2",
+                             width="100%")
+        return int(extract_num(lists[0].findAll("td")[1].contents[0]))
 
     def cancel_order(self, order_num):
         """
@@ -538,13 +526,12 @@ class SBIcomm:
             br["caLiKbn"] = ["limit"]
             today = datetime.date.today()
             day = workdays.workday(today, limit, holidays_list(today.year))
-            br["limit"]=[day.strftime("%Y/%m/%d")]
+            br["limit"] = [day.strftime("%Y/%m/%d")]
         else:
-            self.logger.info("Cannot setting 6 later working day!")
-            raise "Cannot setting 6 later working day!"
+            raise ValueError, "Cannot setting 6 later working day!"
         br["sasinari_kbn"] = [order]
 
-    def _confirm(self, br):
+    def _confirm(self, br, SLEEP_TIME=2):
         """
         確認画面での最終処理を行う
         """
@@ -554,13 +541,11 @@ class SBIcomm:
         br.select_form(nr=0)
         try:
             req = br.click(type="submit", nr=0)
-            self.logger.info("Submitting Order...")
-            time.sleep(self.SLEEP_TIME)
+            print "Submitting Order..."
+            time.sleep(SLEEP_TIME)
             res = br.open(req)
         except:
-            self.logger.info("Cannot Order!")
-            self.logger.info(traceback.format_exc())
-            raise "Cannot Order!"
+            raise RuntimeError, "Cannot Order!"
         try:
             html = res.read().decode(self.ENC)
             soup = BeautifulSoup(html)
@@ -568,9 +553,7 @@ class SBIcomm:
             res.close()
             return inputs[0]["value"]
         except:
-            self.logger.info("Cannot Get Order Code!")
-            self.logger.info(traceback.format_exc())
-            raise "Cannot Get Order Code!"
+            raise ValueError, "Cannot Get Order Code!"
 
     def _init_open(self, page):
         """
