@@ -434,7 +434,7 @@ class SBIcomm:
             br["trigger_zone"] = [comp]
             br["trigger_price"] = str(trigger_price)
         br["hitokutei_trade_kbn"] = [category]
-        br["password"] = self.password
+        br["password"] = self._password
         return self._confirm(br)
 
     def sell_order(self, code, quantity=None, price=None,
@@ -449,7 +449,7 @@ class SBIcomm:
         if inv == True:
             br["trigger_zone"] = [comp]
             br["trigger_price"] = str(trigger_price)
-        br["password"] = self.password
+        br["password"] = self._password
         return self._confirm(br)
 
     def get_order_num_list(self):
@@ -521,7 +521,7 @@ class SBIcomm:
         """
         br = self._init_open(self.pages['cancel'] % order_num)
         br.select_form(nr=0)
-        br["password"] = self.password
+        br["password"] = self._password
         br.submit()
 
     def _set_order_propaty(self, br, quantity, price, limit, order):
