@@ -1,11 +1,9 @@
 #!/bin/usr/env python
 # -*- coding:utf-8 -*-
-import sys
 import re
 import time
 import datetime
 import traceback
-import workdays
 from dateutil.relativedelta import *
 import mechanize
 from BeautifulSoup import *
@@ -182,6 +180,20 @@ def holidays_list(year):
         if holiday.weekday() == 6:
             holidays.append(holiday + datetime.timedelta(days=1))
     return holidays
+
+def calc_workday(start_day, cnt):
+    """
+    start_dayからcnt日後の営業日を求める
+    """
+    holidays = holidays_list(start_day.year)
+    rc = 0
+    next_day = start_day
+    while rc != cnt:
+        next_day += datetime.timedelta(days=1)
+        if not next_day in holidays and \
+                next_day.weekday() <= 4:
+            rc += 1
+    return next_day
 
 
 class SBIcomm:
@@ -536,7 +548,7 @@ class SBIcomm:
         elif limit <= 6:
             br["caLiKbn"] = ["limit"]
             today = datetime.date.today()
-            day = workdays.workday(today, limit, holidays_list(today.year))
+            day = calc_workday(today, limit)
             br["limit"] = [day.strftime("%Y/%m/%d")]
         else:
             raise ValueError, "Cannot setting 6 later working day!"
