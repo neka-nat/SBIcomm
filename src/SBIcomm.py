@@ -65,6 +65,15 @@ class ORDER:
     def __init__(self):
         pass
 
+def is_lim(order):
+    if order == ORDER.MRK_UNC or \
+            order == ORDER.MRK_YORI or \
+            order == ORDER.MRK_HIKI or \
+            order == ORDER.MRK_IOC:
+            return False
+    else:
+        return True
+
 
 class CATEGORY:
     SPC = '0'
@@ -541,7 +550,7 @@ class SBIcomm:
         オーダー時の設定を行う
         """
         br["quantity"] = str(quantity)
-        if order.startswith("LIM"):
+        if is_lim(order):
             br["price"] = str(price)
         if limit == 0:
             br["caLiKbn"] = ["today"]
