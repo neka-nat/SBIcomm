@@ -6,7 +6,8 @@ import datetime
 import traceback
 from dateutil.relativedelta import *
 import mechanize
-from BeautifulSoup import *
+from lxml import html
+
 
 def set_encode(br, enc):
     """
@@ -17,24 +18,14 @@ def set_encode(br, enc):
     br._factory._forms_factory.encoding = enc
     br._factory._links_factory._encoding = enc
 
-
-def getNavigableStrings(soup):
-    if isinstance(soup, NavigableString):
-        if type(soup) not in (Comment, Declaration) and soup.strip():
-            yield soup
-    elif soup.name not in ('script', 'style'):
-        for c in soup.contents:
-            for g in getNavigableStrings(c):
-                yield g
-
-pat = re.compile(r'\d+\.*')
-
+NUM_PAT = re.compile(r'\d+\.*')
+DATE_PAT = re.compile(r'\d\d/\d\d \d\d:\d\d')
 
 def extract_num(string):
     if string == "-":
         return "None"
     else:
-        return "".join(pat.findall(string))
+        return "".join(NUM_PAT.findall(string))
 
 
 def extract_plus_minus_num(string):
@@ -80,11 +71,6 @@ class CATEGORY:
     STD = '1'
     def __init__(self):
         pass
-
-TODAY_MARKET, USA_MARKET, INDUSTRIES, \
-EMERGING, ATTENTION, FORECAST, MARK = range(1, 8)
-
-OPEN, CLOSE, MAX, MIN, VOLUME, GAIN_LOSS, RATE = range(7)
 
 
 class JP_IDX:
@@ -139,18 +125,18 @@ while '__module__' in MARKET_INDICES:
 while '__doc__' in MARKET_INDICES:
     MARKET_INDICES.remove('__doc__')
 
+TODAY_MARKET, USA_MARKET, INDUSTRIES, \
+EMERGING, ATTENTION, FORECAST, MARK = range(1, 8)
 
-def get_indices():
-    """
-    SBI証券から得られるマーケット指標の種類を返す
-    """
-    return MARKET_INDICES
-
+OPEN, CLOSE, MAX, MIN, VOLUME, GAIN_LOSS, RATE = range(7)
 
 # 祝日の設定
 def holidays_list(year):
     """
     yearの年の祝日のリストを返す
+
+    :param year: 西暦
+    :type year: int
     """
     equinox = [lambda y:int(20.8431 + 0.242194 * (y - 1980)) \
                    - int((y - 1980) / 4),
@@ -193,6 +179,9 @@ def holidays_list(year):
 def calc_workday(start_day, cnt):
     """
     start_dayからcnt日後の営業日を求める
+
+    :type start_day: datetime
+    :type cnt: int
     """
     holidays = holidays_list(start_day.year)
     rc = 0
@@ -205,26 +194,28 @@ def calc_workday(start_day, cnt):
     return next_day
 
 
+BASE_URL = "https://k.sbisec.co.jp"
+STOCK_DIR = BASE_URL + "/bsite/member/stock"
+ACC_DIR = BASE_URL + "/bsite/member/acc"
+SLEEP_TIME = 2
+
 class SBIcomm:
     """
     SBI証券のサイトをスクレイピングして株価の情報取得やオーダーの送信等のやりとりを行うクラス
     """
     # URL
-    DOMAIN = "https://k.sbisec.co.jp"
-    STOCK_DIR = DOMAIN + "/bsite/member/stock"
-    ACC_DIR = DOMAIN + "/bsite/member/acc"
-    pages = {'top': DOMAIN + "/bsite/visitor/top.do",
-             'search': DOMAIN + "/bsite/price/search.do",
-             'market': DOMAIN + "/bsite/market/indexDetail.do",
-             'info': DOMAIN + "/bsite/market/marketInfoDetail.do?id=%02d",
-             'news': DOMAIN + "/bsite/market/newsList.do?page=%d",
-             'foreign': DOMAIN + "/bsite/market/foreignIndexDetail.do",
-             'curr': DOMAIN + "/bsite/market/forexDetail.do",
+    pages = {'top': BASE_URL + "/bsite/visitor/top.do",
+             'search': BASE_URL + "/bsite/price/search.do",
+             'market': BASE_URL + "/bsite/market/indexDetail.do",
+             'info': BASE_URL + "/bsite/market/marketInfoDetail.do?id=%02d",
+             'news': BASE_URL + "/bsite/market/newsList.do?page=%d",
+             'foreign': BASE_URL + "/bsite/market/foreignIndexDetail.do",
+             'curr': BASE_URL + "/bsite/market/forexDetail.do",
              'buy': STOCK_DIR + \
                  "/buyOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
              'sell': STOCK_DIR + \
                  "/sellOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
-             'credit': DOMAIN + \
+             'credit': BASE_URL + \
                  "/bsite/price/marginDetail.do?ipm_product_code=%s&market=TKY",
              'list': STOCK_DIR + \
                  "/orderList.do?cayen.comboOff=1",
@@ -236,9 +227,25 @@ class SBIcomm:
              'manege':ACC_DIR + "/holdStockList.do"}
 
     ENC = "cp932"
+    def _x(self, path):
+        return "//table/tr/td/table" + path
 
     def __init__(self, username=None, password=None,
                  proxy=None, proxy_user=None, proxy_password=None):
+        """
+        コンストラクタ
+
+        :param username: SBI証券でのユーザ名
+        :type username: str
+        :param password: パスワード
+        :type password: str
+        :param proxy: プロキシ
+        :type proxy: str
+        :param proxy_user: プロキシのユーザ名
+        :type proxy_user: str
+        :param proxy_password: プロキシのパスワード
+        :type proxy_password: str
+        """
         self._username = username
         self._password = password
         self._proxy = proxy
@@ -246,6 +253,11 @@ class SBIcomm:
         self._proxy_password = proxy_password
 
     def _browser_open(self):
+        """
+        ブラウザの作成
+
+        :return: ブラウザオブジェクト
+        """
         br = mechanize.Browser()
         br.set_handle_robots(False)
         if not self._proxy is None:
@@ -260,6 +272,8 @@ class SBIcomm:
     def submit_user_and_pass(self):
         """
         トップページにユーザー名とパスワードを送信
+
+        :return: ログインした後のブラウザオブジェクト
         """
         br = self._browser_open()
         br.open(self.pages['top'])
@@ -273,6 +287,9 @@ class SBIcomm:
     def get_value(self, code):
         """
         現在の日付、株価を返す
+
+        :param code: 企業コード
+        :type code: str
         """
         br = self._browser_open()
         res = br.open(self.pages['search'])
@@ -280,30 +297,26 @@ class SBIcomm:
         br.select_form(nr=0)
         br["ipm_product_code"] = str(code)
         res = br.submit()
-
         # 取得したhtmlを解析して日付と価格を求める
-        html = res.read().decode(self.ENC)
-        soup = BeautifulSoup(html)
-        price_list = soup.findAll("tr", valign="top")
+        doc = html.fromstring(res.read().decode(self.ENC))
         try:
-            cnt = 1 if price_list[2].find("font") is None else 0
-            num = price_list[2 + cnt].find("font")
-            end_price = float(extract_num(num.contents[0]))
-            num = price_list[3 + cnt].find("font")
-            m = [pat.findall(price_list[i + cnt].findAll("td", align="right")[0].contents[0].replace(",",""))[0] \
-                     for i in range(4,7)]
-            volume = int(extract_num(price_list[4 + cnt].findAll("td", align="right")[1].contents[0]))
-            num_list = pat.findall(price_list[2 + cnt].findAll("td")[1].contents[1])
+            end_price = float(doc.xpath(self._x("/tr[2]/td/font"))[0].text.replace(",", ""))
+            path_list = doc.xpath(self._x("/tr[@valign='top']/td[@nowrap][@align='right']"))
+            start_price = float(NUM_PAT.findall(path_list[1].text.replace(",",""))[0])
+            volume = int(NUM_PAT.findall(path_list[2].text.replace(",",""))[0])
+            max_price = float(NUM_PAT.findall(path_list[3].text.replace(",",""))[0])
+            min_price = float(NUM_PAT.findall(path_list[5].text.replace(",",""))[0])
+            # 日付の取得
+            path_list = doc.xpath(self._x("/tr[2]/td[2]"))[0]
+            num_list = DATE_PAT.findall(path_list.text_content())
+            date = datetime.datetime.strptime(num_list[0] + " " + str(datetime.date.today().year),
+                                              '%m/%d %H:%M %Y')
+            # 損益の取得
+            num = doc.xpath(self._x("/tr[3]/td/font"))[0]
             if num is None:
                 gain_loss = 0.0
             else:
-                num_str = num.contents[0]
-                gain_loss = extract_plus_minus_num(num_str)
-            start_price = float(m[0])
-            max_price = float(m[1])
-            min_price = float(m[2])
-            # 日付の取得
-            date = datetime.date(datetime.date.today().year, int(num_list[0]), int(num_list[1]))
+                gain_loss = float(num.text)
             return date, [start_price, end_price, max_price, min_price, volume,
                           gain_loss, gain_loss / (end_price - gain_loss)]
         except:
@@ -314,6 +327,9 @@ class SBIcomm:
     def get_market_index(self, index_name='nk225'):
         """
         市場の指標を返す
+
+        :param index_name: 市場の指標の種類
+        :type index_name: str
         """
         # index_nameがどのページから見られるかを探す
         if index_name in JP_IDX.__dict__.keys():
@@ -333,24 +349,26 @@ class SBIcomm:
         br["data_type"] = [index_name]
         req = br.click(type="submit", nr=0)
         res = br.open(req)
-        html = res.read().decode(self.ENC)
-        soup = BeautifulSoup(html)
-        price_list = soup.findAll("table", border="0", cellspacing="2",
-                                  cellpadding="0", style="margin-top:5px;")
-        l = price_list[0].findAll("font")
+        doc = html.fromstring(res.read().decode(self.ENC))
+        path_list = doc.xpath(self._x("/tr/td/form/table[@border='0']/tr/td[@nowrap]"))
         try:
             if kind == 'curr':
-                end_price = float(extract_num(l[0].contents[0].split('-')[0]))
+                end_price = float(extract_num(path_list[1].xpath("font")[0].text.split('-')[0]))
+                start_price = float(extract_num(path_list[6].text))
+                max_price = float(extract_num(path_list[8].text))
+                min_price = float(extract_num(path_list[10].text))
             else:
-                end_price = float(extract_num(l[0].contents[0]))
+                end_price = float(extract_num(path_list[1].xpath("font")[0].text))
+                start_price = float(extract_num(path_list[5].text))
+                max_price = float(extract_num(path_list[7].text))
+                min_price = float(extract_num(path_list[9].text))
             try:
-                gain_loss = extract_plus_minus_num(l[1].contents[0])
+                if kind == 'curr':
+                    gain_loss = extract_plus_minus_num(path_list[4].xpath("font")[0].text)
+                else:
+                    gain_loss = extract_plus_minus_num(path_list[3].xpath("font")[0].text)
             except IndexError:
                 gain_loss = 0.0
-            l = price_list[1].findAll("td")
-            start_price = float(extract_num(l[1].contents[0]))
-            max_price = float(extract_num(l[3].contents[0]))
-            min_price = float(extract_num(l[5].contents[0]))
             return [start_price, end_price, max_price, min_price,
                     gain_loss, gain_loss / (end_price - gain_loss)]
         except:
@@ -365,11 +383,9 @@ class SBIcomm:
         """
         市場情報を取得する
         """
-        soup = self._get_soup(self.pages['info'] % info_no)
-        text_list = soup.findAll("table", border="0", cellspacing="0",
-                                 cellpadding="0", width="100%",
-                                 style="margin-top:10px;")
-        return '\n'.join(getNavigableStrings(text_list[1]))
+        doc = self._get_parser(self.pages['info'] % info_no)
+        path_list = doc.xpath(self._x("/tr/td/table[@border='0']/tr[@valign='top']/td"))
+        return "\n".join([path_list[1].text, path_list[3].text_content()])
 
     def get_market_news(self):
         """
@@ -381,61 +397,51 @@ class SBIcomm:
             br.open(self.pages['news'] % page)
             set_encode(br, self.ENC)
             for link in br.links(url_regex='newsDetail'):
-                urls.append(self.DOMAIN + link.url)
+                urls.append(BASE_URL + link.url)
         br.close()
 
         text_list = []
         for url in urls:
             br = self.submit_user_and_pass()
             res = br.open(url)
-            html = res.read().decode(self.ENC)
-            soup = BeautifulSoup(html)
-            lists = soup.findAll("table", width="100%",
-                                 cellspacing="0", cellpadding="0")
-            date = '\n'.join(getNavigableStrings(lists[2].contents[1].find("td").contents[3]))
-            raw_text = ''.join(BeautifulSoup(html).findAll(text=True,
-                                                           width="100%",
-                                                           cellspacing="0",
-                                                           cellpadding="0")).replace('\n', '')
-            findx = raw_text.find(u"ニュース本文") + len(u"ニュース本文")
-            lindx = raw_text.rfind(u"国内指標ランキング市況コメント")
-            text_list.append([date, raw_text[findx:lindx]])
+            doc = html.fromstring(res.read().decode(self.ENC))
+            path_list = doc.xpath("//table/tr/td/table[@width='100%'][@cellspacing='0'][@cellpadding='0']/tr[not(@*)]/td[not(@*)]")
+            text = path_list[0].text_content().replace("\n", "").replace("\t", "").replace("\r", "")
+            text_list.append(text.rstrip(u"国内指標ランキング市況コメント海外指標外国為替"))
             br.close()
-
         return text_list
 
     def get_credit_record(self, code):
         """
         企業の信用情報を取得する
         """
-        soup = self._get_soup(self.pages['credit'] % code)
-        lists = soup.findAll("table", border="0",
-                             cellspacing="0", cellpadding="0")
+        doc = self._get_parser(self.pages['credit'] % code)
+        path_list = doc.xpath("//table/tr/td/table[@border='0'][@cellspacing='0'][@cellpadding='0']")
         records = {}
         try:
-            l = lists[5].findAll("td")
-            records["unsold"] = [eval(extract_num(l[1].contents[0])), extract_plus_minus_num(l[3].contents[0])]
-            records["margin"] = [eval(extract_num(l[5].contents[0])), extract_plus_minus_num(l[7].contents[0])]
+            l = path_list[4].xpath("tr/td[@align='right']")
+            records["unsold"] = [eval(extract_num(l[0].text)), extract_plus_minus_num(l[1].text)]
+            records["margin"] = [eval(extract_num(l[2].text)), extract_plus_minus_num(l[3].text)]
             if records["unsold"][0] is None or records["margin"][0] is None:
                 records["ratio"] = None
             else:
                 records["ratio"] = float(records["margin"][0])/float(records["unsold"][0])
         
-            l = lists[6].findAll("td")
-            records["lending_stock"] = {"new":eval(extract_num(l[2].contents[0])),
-                                        "repayment":eval(extract_num(l[4].contents[0])),
-                                        "balance":eval(extract_num(l[6].contents[0])),
-                                        "ratio":extract_plus_minus_num(l[8].contents[0])}
-            records["finance_loan"] = {"new":eval(extract_num(l[11].contents[0])),
-                                       "repayment":eval(extract_num(l[13].contents[0])),
-                                       "balance":eval(extract_num(l[15].contents[0])),
-                                       "ratio":extract_plus_minus_num(l[17].contents[0])}
+            l = path_list[5].xpath("tr/td[@align='right']")
+            records["lending_stock"] = {"new":eval(extract_num(l[0].text)),
+                                        "repayment":eval(extract_num(l[1].text)),
+                                        "balance":eval(extract_num(l[2].text)),
+                                        "ratio":extract_plus_minus_num(l[3].text)}
+            records["finance_loan"] = {"new":eval(extract_num(l[4].text)),
+                                       "repayment":eval(extract_num(l[5].text)),
+                                       "balance":eval(extract_num(l[6].text)),
+                                       "ratio":extract_plus_minus_num(l[7].text)}
             if records["finance_loan"]["balance"] is None or records["lending_stock"]["balance"] is None:
                 records["diff"] = None
             else:
                 records["diff"] = records["finance_loan"]["balance"] - records["lending_stock"]["balance"]
-            records["diff_ratio"] = extract_plus_minus_num(l[21].contents[0])
-            records["balance_ratio"] = eval(extract_num(l[24].contents[0]))
+            records["diff_ratio"] = extract_plus_minus_num(l[9].text)
+            records["balance_ratio"] = eval(extract_num(l[10].text))
         except:
             print traceback.format_exc()
             print "Cannot Get Value! %s" % code
@@ -477,64 +483,54 @@ class SBIcomm:
         """
         オーダーのリストを取得する
         """
-        soup = self._get_soup(self.pages['list'])
-        lists = soup.findAll("td", width="20%", align="center")
-        mlist = [re.search("\d{6}", l.findAll("a")[0]['href']) for l in lists]
+        doc = self._get_parser(self.pages['list'])
+        path_list = doc.xpath("//td[@width='20%'][@align='center']")
+        mlist = [re.search("\d{6}", l.xpath("descendant::a")[0].attrib['href']) for l in path_list]
         return [m.group(0) for m in mlist]
 
     def get_order_info(self, order_num):
         """
         オーダーの情報を取得する
         """
-        soup = self._get_soup(self.pages['correct'] % order_num)
+        doc = self._get_parser(self.pages['correct'] % order_num)
         try:
-            l = soup.find("form",
-                          action="/bsite/member/stock/orderCorrectEntry.do",
-                          method="POST")
-            code = int(extract_num(l.find("td").contents[0].contents[0]))
-            l = soup.find("form",
-                          action="/bsite/member/stock/orderCorrectConfirm.do",
-                          method="POST")
-            state = l.findAll("td")[1].contents[0]
-            n_order = int(extract_num(l.findAll("td")[3].contents[0]))
-            return {'code': code, 'number': n_order, 'state': state}
+            path_list = doc.xpath("//form[@action='/bsite/member/stock/orderCorrectEntry.do'][@method='POST']")
+            code = extract_num(path_list[0].xpath("descendant::td/b")[0].text)
+            path_list = doc.xpath("//form[@action='/bsite/member/stock/orderCorrectConfirm.do'][@method='POST']")
+            tds = path_list[0].xpath("descendant::td")
+            return {'code': code, 'number': int(extract_num(tds[3].text)), 'state': tds[1].text}
         except:
-            raise ValueError, "Cannot get info %d!" % order_num
+            raise ValueError, "Cannot get info %s!" % order_num
 
     def get_purchase_margin(self, wday_step=0):
         """
         指定した営業日後での買付余力を取得する
         """
-        soup = self._get_soup(self.pages['schedule'])
-        lists = soup.findAll("tr", bgcolor="#f9f9f9")
-        return int(extract_num(lists[wday_step].find("td", align="right").contents[0]))
+        doc = self._get_parser(self.pages['schedule'])
+        path_list = doc.xpath(self._x("/tr/td/table/tr/td[@align='right']"))
+        return int(extract_num(path_list[wday_step].text))
 
     def get_hold_stock_info(self):
         """
         現在の所持している株の情報を取得
         """
-        soup = self._get_soup(self.pages['manege'])
-        lists = soup.find("table", border="0",
-                          cellspacing="1", cellpadding="2",
-                          width="100%", bgcolor="#7E7ECC").findAll("tr")
+        doc = self._get_parser(self.pages['manege'])
+        path_list = doc.xpath(self._x("/tr/td/table/tr/td/table/tr/td[@colspan or @align='right']"))
         stock_list = {}
-        for l0, l1, l2 in zip(lists[0::3], lists[1::3], lists[2::3]):
-            val_str = l2.contents[7].contents[0].contents[0]
-            code = int(extract_num(l0.contents[0].contents[0]))
-            stock_list[code] = {"number": int(extract_num(l1.contents[7].contents[0])),
-                                "value": int(extract_num(l1.contents[3].contents[0])),
-                                "gain": eval(val_str[0] + "1")*int(extract_num(val_str))}
+        for l0, l1, l2, l3 in zip(path_list[0::5], path_list[1::5], path_list[2::5], path_list[4::5]):
+            code = extract_num(l0.text)
+            stock_list[code] = {"value": int(extract_num(l1.text)),
+                                "number": int(extract_num(l2.text)),
+                                "gain": eval(l3.text_content()[0] + "1")*int(extract_num(l3.text_content()))}
         return stock_list
 
     def get_total_eval(self):
         """
         現在の評価合計を取得する
         """
-        soup = self._get_soup(self.pages['manege'])
-        lists = soup.findAll("table", border="0",
-                             cellspacing="1", cellpadding="2",
-                             width="100%")
-        return int(extract_num(lists[0].findAll("td")[1].contents[0]))
+        doc = self._get_parser(self.pages['manege'])
+        path_list = doc.xpath(self._x("/tr/td/table/tr/td/table/tr[@align='center']/td"))
+        return int(extract_num(path_list[1].text))
 
     def cancel_order(self, order_num):
         """
@@ -563,7 +559,7 @@ class SBIcomm:
             raise ValueError, "Cannot setting 6 later working day!"
         br["sasinari_kbn"] = [order]
 
-    def _confirm(self, br, SLEEP_TIME=2):
+    def _confirm(self, br):
         """
         確認画面での最終処理を行う
         """
@@ -579,11 +575,9 @@ class SBIcomm:
         except:
             raise RuntimeError, "Cannot Order!"
         try:
-            html = res.read().decode(self.ENC)
-            soup = BeautifulSoup(html)
-            inputs = soup.findAll("input")
-            res.close()
-            return inputs[0]["value"]
+            doc = html.fromstring(res.read().decode(self.ENC))
+            path_list = doc.xpath("//input")
+            return path_list[0].attrib['value']
         except:
             raise ValueError, "Cannot Get Order Code!"
 
@@ -596,14 +590,13 @@ class SBIcomm:
         set_encode(br, self.ENC)
         return br
 
-    def _get_soup(self, page):
+    def _get_parser(self, page):
         """
         指定したページをパースするパーサを取得する
         """
         br = self.submit_user_and_pass()
         res = br.open(page)
-        html = res.read().decode(self.ENC)
-        return BeautifulSoup(html)
+        return html.fromstring(res.read().decode(self.ENC))
 
 if __name__ == "__main__":
     sbi = SBIcomm("hogehoge", "hogehoge")
