@@ -1,8 +1,7 @@
 このプログラムはSBI証券を経由して、株の売買を行うプログラムです。
 以下のライブラリを必要とします。
+dateutil
 mechanize
-BeautifulSoup
-workday
-APScheduler
+lxml
 
 このプログラムの使用によって生じる責任は一切負いません。

@@ -230,7 +230,7 @@ class SBIcomm:
     def _x(self, path):
         return "//table/tr/td/table" + path
 
-    def __init__(self, username=None, password=None,
+    def __init__(self, username, password,
                  proxy=None, proxy_user=None, proxy_password=None):
         """
         コンストラクタ
@@ -377,6 +377,9 @@ class SBIcomm:
             return [None, None, None, None, None, None]
 
     def get_nikkei_avg(self):
+        """
+        日経平均を取得する
+        """
         return self.get_market_index()
 
     def get_market_info(self, info_no=TODAY_MARKET):
@@ -599,10 +602,16 @@ class SBIcomm:
         return html.fromstring(res.read().decode(self.ENC))
 
 if __name__ == "__main__":
-    sbi = SBIcomm("hogehoge", "hogehoge")
-    print sbi.get_total_eval()
-    print sbi.get_market_index("j_stock")
-    print sbi.get_market_info()
-    #print sbi.buy_order("6758", 100, 1000, inv=True, trigger_price=999)
+    print calc_workday(datetime.date.today(), 4)
+    #sbi = SBIcomm("hogehoge", "hogehoge")
+    #print sbi.buy_order("6752", 100, 614, inv=True, trigger_price=612)
     #print sbi.get_value("6758")
     #print sbi.get_purchase_margin()
+    print sbi.get_hold_stock_info()
+    #print sbi.get_order_num_list()
+    #print sbi.get_total_eval()
+    #print sbi.get_market_index("j_stock")
+    #print sbi.get_market_info(2)
+    #news = sbi.get_market_news()
+    #print news[0]
+    #print sbi.get_credit_record("6758")
