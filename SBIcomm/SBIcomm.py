@@ -9,7 +9,7 @@ import mechanize
 from lxml import html
 
 
-def set_encode(br, enc):
+def _set_encode(br, enc):
     """
     サイトのエンコードを変更する
     これをしないとSBI証券ではWindows-31Jを用いているためうまくdecodeできない
@@ -18,18 +18,18 @@ def set_encode(br, enc):
     br._factory._forms_factory.encoding = enc
     br._factory._links_factory._encoding = enc
 
-NUM_PAT = re.compile(r'\d+\.*')
-DATE_PAT = re.compile(r'\d\d/\d\d \d\d:\d\d')
+_NUM_PAT = re.compile(r'\d+\.*')
+_DATE_PAT = re.compile(r'\d\d/\d\d \d\d:\d\d')
 
-def extract_num(string):
+def _extract_num(string):
     if string == "-":
         return "None"
     else:
-        return "".join(NUM_PAT.findall(string))
+        return "".join(_NUM_PAT.findall(string))
 
 
-def extract_plus_minus_num(string):
-    num = eval(extract_num(string))
+def _extract_plus_minus_num(string):
+    num = eval(_extract_num(string))
     if num is None:
         return None
     else:
@@ -56,7 +56,7 @@ class ORDER:
     def __init__(self):
         pass
 
-def is_lim(order):
+def _is_lim(order):
     if order == ORDER.MRK_UNC or \
             order == ORDER.MRK_YORI or \
             order == ORDER.MRK_HIKI or \
@@ -277,7 +277,7 @@ class SBIcomm:
         """
         br = self._browser_open()
         br.open(self.pages['top'])
-        set_encode(br, self.ENC)
+        _set_encode(br, self.ENC)
         br.select_form(name="form1")
         br["username"] = self._username
         br["password"] = self._password
@@ -293,7 +293,7 @@ class SBIcomm:
         """
         br = self._browser_open()
         res = br.open(self.pages['search'])
-        set_encode(br, self.ENC)
+        _set_encode(br, self.ENC)
         br.select_form(nr=0)
         br["ipm_product_code"] = str(code)
         res = br.submit()
@@ -302,13 +302,13 @@ class SBIcomm:
         try:
             end_price = float(doc.xpath(self._x("/tr[2]/td/font"))[0].text.replace(",", ""))
             path_list = doc.xpath(self._x("/tr[@valign='top']/td[@nowrap][@align='right']"))
-            start_price = float(NUM_PAT.findall(path_list[1].text.replace(",",""))[0])
-            volume = int(NUM_PAT.findall(path_list[2].text.replace(",",""))[0])
-            max_price = float(NUM_PAT.findall(path_list[3].text.replace(",",""))[0])
-            min_price = float(NUM_PAT.findall(path_list[5].text.replace(",",""))[0])
+            start_price = float(_NUM_PAT.findall(path_list[1].text.replace(",",""))[0])
+            volume = int(_NUM_PAT.findall(path_list[2].text.replace(",",""))[0])
+            max_price = float(_NUM_PAT.findall(path_list[3].text.replace(",",""))[0])
+            min_price = float(_NUM_PAT.findall(path_list[5].text.replace(",",""))[0])
             # 日付の取得
             path_list = doc.xpath(self._x("/tr[2]/td[2]"))[0]
-            num_list = DATE_PAT.findall(path_list.text_content())
+            num_list = _DATE_PAT.findall(path_list.text_content())
             date = datetime.datetime.strptime(num_list[0] + " " + str(datetime.date.today().year),
                                               '%m/%d %H:%M %Y')
             # 損益の取得
@@ -317,8 +317,8 @@ class SBIcomm:
                 gain_loss = 0.0
             else:
                 gain_loss = float(num.text)
-            return date, [start_price, end_price, max_price, min_price, volume,
-                          gain_loss, gain_loss / (end_price - gain_loss)]
+            return date, (start_price, end_price, max_price, min_price, volume,
+                          gain_loss, gain_loss / (end_price - gain_loss))
         except:
             print traceback.format_exc()
             print "Cannot Get Value! %s" % code
@@ -344,7 +344,7 @@ class SBIcomm:
         else:
             br = self.submit_user_and_pass()
         br.open(self.pages[kind])
-        set_encode(br, self.ENC)
+        _set_encode(br, self.ENC)
         br.select_form(nr=0)
         br["data_type"] = [index_name]
         req = br.click(type="submit", nr=0)
@@ -353,28 +353,28 @@ class SBIcomm:
         path_list = doc.xpath(self._x("/tr/td/form/table[@border='0']/tr/td[@nowrap]"))
         try:
             if kind == 'curr':
-                end_price = float(extract_num(path_list[1].xpath("font")[0].text.split('-')[0]))
-                start_price = float(extract_num(path_list[6].text))
-                max_price = float(extract_num(path_list[8].text))
-                min_price = float(extract_num(path_list[10].text))
+                end_price = float(_extract_num(path_list[1].xpath("font")[0].text.split('-')[0]))
+                start_price = float(_extract_num(path_list[6].text))
+                max_price = float(_extract_num(path_list[8].text))
+                min_price = float(_extract_num(path_list[10].text))
             else:
-                end_price = float(extract_num(path_list[1].xpath("font")[0].text))
-                start_price = float(extract_num(path_list[5].text))
-                max_price = float(extract_num(path_list[7].text))
-                min_price = float(extract_num(path_list[9].text))
+                end_price = float(_extract_num(path_list[1].xpath("font")[0].text))
+                start_price = float(_extract_num(path_list[5].text))
+                max_price = float(_extract_num(path_list[7].text))
+                min_price = float(_extract_num(path_list[9].text))
             try:
                 if kind == 'curr':
-                    gain_loss = extract_plus_minus_num(path_list[4].xpath("font")[0].text)
+                    gain_loss = _extract_plus_minus_num(path_list[4].xpath("font")[0].text)
                 else:
-                    gain_loss = extract_plus_minus_num(path_list[3].xpath("font")[0].text)
+                    gain_loss = _extract_plus_minus_num(path_list[3].xpath("font")[0].text)
             except IndexError:
                 gain_loss = 0.0
-            return [start_price, end_price, max_price, min_price,
-                    gain_loss, gain_loss / (end_price - gain_loss)]
+            return (start_price, end_price, max_price, min_price,
+                    gain_loss, gain_loss / (end_price - gain_loss))
         except:
             print traceback.format_exc()
             print "Cannot Get Value! %s" % index_name
-            return [None, None, None, None, None, None]
+            return (None, None, None, None, None, None)
 
     def get_nikkei_avg(self):
         """
@@ -398,7 +398,7 @@ class SBIcomm:
         urls = []
         for page in range(5):
             br.open(self.pages['news'] % page)
-            set_encode(br, self.ENC)
+            _set_encode(br, self.ENC)
             for link in br.links(url_regex='newsDetail'):
                 urls.append(BASE_URL + link.url)
         br.close()
@@ -423,28 +423,28 @@ class SBIcomm:
         records = {}
         try:
             l = path_list[4].xpath("tr/td[@align='right']")
-            records["unsold"] = [eval(extract_num(l[0].text)), extract_plus_minus_num(l[1].text)]
-            records["margin"] = [eval(extract_num(l[2].text)), extract_plus_minus_num(l[3].text)]
+            records["unsold"] = [eval(_extract_num(l[0].text)), _extract_plus_minus_num(l[1].text)]
+            records["margin"] = [eval(_extract_num(l[2].text)), _extract_plus_minus_num(l[3].text)]
             if records["unsold"][0] is None or records["margin"][0] is None:
                 records["ratio"] = None
             else:
                 records["ratio"] = float(records["margin"][0])/float(records["unsold"][0])
         
             l = path_list[5].xpath("tr/td[@align='right']")
-            records["lending_stock"] = {"new":eval(extract_num(l[0].text)),
-                                        "repayment":eval(extract_num(l[1].text)),
-                                        "balance":eval(extract_num(l[2].text)),
-                                        "ratio":extract_plus_minus_num(l[3].text)}
-            records["finance_loan"] = {"new":eval(extract_num(l[4].text)),
-                                       "repayment":eval(extract_num(l[5].text)),
-                                       "balance":eval(extract_num(l[6].text)),
-                                       "ratio":extract_plus_minus_num(l[7].text)}
+            records["lending_stock"] = {"new":eval(_extract_num(l[0].text)),
+                                        "repayment":eval(_extract_num(l[1].text)),
+                                        "balance":eval(_extract_num(l[2].text)),
+                                        "ratio":_extract_plus_minus_num(l[3].text)}
+            records["finance_loan"] = {"new":eval(_extract_num(l[4].text)),
+                                       "repayment":eval(_extract_num(l[5].text)),
+                                       "balance":eval(_extract_num(l[6].text)),
+                                       "ratio":_extract_plus_minus_num(l[7].text)}
             if records["finance_loan"]["balance"] is None or records["lending_stock"]["balance"] is None:
                 records["diff"] = None
             else:
                 records["diff"] = records["finance_loan"]["balance"] - records["lending_stock"]["balance"]
-            records["diff_ratio"] = extract_plus_minus_num(l[9].text)
-            records["balance_ratio"] = eval(extract_num(l[10].text))
+            records["diff_ratio"] = _extract_plus_minus_num(l[9].text)
+            records["balance_ratio"] = eval(_extract_num(l[10].text))
         except:
             print traceback.format_exc()
             print "Cannot Get Value! %s" % code
@@ -498,10 +498,10 @@ class SBIcomm:
         doc = self._get_parser(self.pages['correct'] % order_num)
         try:
             path_list = doc.xpath("//form[@action='/bsite/member/stock/orderCorrectEntry.do'][@method='POST']")
-            code = extract_num(path_list[0].xpath("descendant::td/b")[0].text)
+            code = _extract_num(path_list[0].xpath("descendant::td/b")[0].text)
             path_list = doc.xpath("//form[@action='/bsite/member/stock/orderCorrectConfirm.do'][@method='POST']")
             tds = path_list[0].xpath("descendant::td")
-            return {'code': code, 'number': int(extract_num(tds[3].text)), 'state': tds[1].text}
+            return {'code': code, 'number': int(_extract_num(tds[3].text)), 'state': tds[1].text}
         except:
             raise ValueError, "Cannot get info %s!" % order_num
 
@@ -511,7 +511,7 @@ class SBIcomm:
         """
         doc = self._get_parser(self.pages['schedule'])
         path_list = doc.xpath(self._x("/tr/td/table/tr/td[@align='right']"))
-        return int(extract_num(path_list[wday_step].text))
+        return int(_extract_num(path_list[wday_step].text))
 
     def get_hold_stock_info(self):
         """
@@ -521,10 +521,10 @@ class SBIcomm:
         path_list = doc.xpath(self._x("/tr/td/table/tr/td/table/tr/td[@colspan or @align='right']"))
         stock_list = {}
         for l0, l1, l2, l3 in zip(path_list[0::5], path_list[1::5], path_list[2::5], path_list[4::5]):
-            code = extract_num(l0.text)
-            stock_list[code] = {"value": int(extract_num(l1.text)),
-                                "number": int(extract_num(l2.text)),
-                                "gain": eval(l3.text_content()[0] + "1")*int(extract_num(l3.text_content()))}
+            code = _extract_num(l0.text)
+            stock_list[code] = {"value": int(_extract_num(l1.text)),
+                                "number": int(_extract_num(l2.text)),
+                                "gain": eval(l3.text_content()[0] + "1") * int(_extract_num(l3.text_content()))}
         return stock_list
 
     def get_total_eval(self):
@@ -533,7 +533,7 @@ class SBIcomm:
         """
         doc = self._get_parser(self.pages['manege'])
         path_list = doc.xpath(self._x("/tr/td/table/tr/td/table/tr[@align='center']/td"))
-        return int(extract_num(path_list[1].text))
+        return int(_extract_num(path_list[1].text))
 
     def cancel_order(self, order_num):
         """
@@ -549,7 +549,7 @@ class SBIcomm:
         オーダー時の設定を行う
         """
         br["quantity"] = str(quantity)
-        if is_lim(order):
+        if _is_lim(order):
             br["price"] = str(price)
         if limit == 0:
             br["caLiKbn"] = ["today"]
@@ -568,7 +568,7 @@ class SBIcomm:
         """
         req = br.click(type="submit", nr=1)
         res = br.open(req)
-        set_encode(br, self.ENC)
+        _set_encode(br, self.ENC)
         br.select_form(nr=0)
         try:
             req = br.click(type="submit", nr=0)
@@ -590,7 +590,7 @@ class SBIcomm:
         """
         br = self.submit_user_and_pass()
         res = br.open(page)
-        set_encode(br, self.ENC)
+        _set_encode(br, self.ENC)
         return br
 
     def _get_parser(self, page):
@@ -601,17 +601,4 @@ class SBIcomm:
         res = br.open(page)
         return html.fromstring(res.read().decode(self.ENC))
 
-if __name__ == "__main__":
-    print calc_workday(datetime.date.today(), 4)
-    #sbi = SBIcomm("hogehoge", "hogehoge")
-    #print sbi.buy_order("6752", 100, 614, inv=True, trigger_price=612)
-    #print sbi.get_value("6758")
-    #print sbi.get_purchase_margin()
-    print sbi.get_hold_stock_info()
-    #print sbi.get_order_num_list()
-    #print sbi.get_total_eval()
-    #print sbi.get_market_index("j_stock")
-    #print sbi.get_market_info(2)
-    #news = sbi.get_market_news()
-    #print news[0]
-    #print sbi.get_credit_record("6758")
+    
