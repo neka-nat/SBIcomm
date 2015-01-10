@@ -6,17 +6,8 @@ import datetime
 import traceback
 from dateutil.relativedelta import *
 import mechanize
+import cookielib
 from lxml import html
-
-
-def _set_encode(br, enc):
-    """
-    サイトのエンコードを変更する
-    これをしないとSBI証券ではWindows-31Jを用いているためうまくdecodeできない
-    """
-    br._factory.encoding = enc
-    br._factory._forms_factory.encoding = enc
-    br._factory._links_factory._encoding = enc
 
 _NUM_PAT = re.compile(r'\d+\.*')
 _DATE_PAT = re.compile(r'\d\d/\d\d \d\d:\d\d')
@@ -61,7 +52,7 @@ def _is_lim(order):
             order == ORDER.MRK_YORI or \
             order == ORDER.MRK_HIKI or \
             order == ORDER.MRK_IOC:
-            return False
+        return False
     else:
         return True
 
@@ -194,39 +185,39 @@ def calc_workday(start_day, cnt):
     return next_day
 
 
-BASE_URL = "https://k.sbisec.co.jp"
-STOCK_DIR = BASE_URL + "/bsite/member/stock"
-ACC_DIR = BASE_URL + "/bsite/member/acc"
-SLEEP_TIME = 2
+_BASE_URL = "https://k.sbisec.co.jp"
+_STOCK_DIR = _BASE_URL + "/bsite/member/stock"
+_ACC_DIR = _BASE_URL + "/bsite/member/acc"
+
 
 class SBIcomm:
     """
     SBI証券のサイトをスクレイピングして株価の情報取得やオーダーの送信等のやりとりを行うクラス
     """
     # URL
-    pages = {'top': BASE_URL + "/bsite/visitor/top.do",
-             'search': BASE_URL + "/bsite/price/search.do",
-             'market': BASE_URL + "/bsite/market/indexDetail.do",
-             'info': BASE_URL + "/bsite/market/marketInfoDetail.do?id=%02d",
-             'news': BASE_URL + "/bsite/market/newsList.do?page=%d",
-             'foreign': BASE_URL + "/bsite/market/foreignIndexDetail.do",
-             'curr': BASE_URL + "/bsite/market/forexDetail.do",
-             'buy': STOCK_DIR + \
-                 "/buyOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
-             'sell': STOCK_DIR + \
-                 "/sellOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
-             'credit': BASE_URL + \
-                 "/bsite/price/marginDetail.do?ipm_product_code=%s&market=TKY",
-             'list': STOCK_DIR + \
-                 "/orderList.do?cayen.comboOff=1",
-             'correct': STOCK_DIR + \
-                 "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=%s",
-             'cancel': STOCK_DIR + \
-                 "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=%s",
-             'schedule':ACC_DIR + "/stockClearingScheduleList.do",
-             'manege':ACC_DIR + "/holdStockList.do"}
+    pages = {'top': _BASE_URL + "/bsite/visitor/top.do",
+             'search': _BASE_URL + "/bsite/price/search.do",
+             'market': _BASE_URL + "/bsite/market/indexDetail.do",
+             'info': _BASE_URL + "/bsite/market/marketInfoDetail.do?id=%02d",
+             'news': _BASE_URL + "/bsite/market/newsList.do?page=%d",
+             'foreign': _BASE_URL + "/bsite/market/foreignIndexDetail.do",
+             'curr': _BASE_URL + "/bsite/market/forexDetail.do",
+             'buy': _STOCK_DIR +
+             "/buyOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
+             'sell': _STOCK_DIR +
+             "/sellOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
+             'credit': _BASE_URL +
+             "/bsite/price/marginDetail.do?ipm_product_code=%s&market=TKY",
+             'list': _STOCK_DIR +
+             "/orderList.do?cayen.comboOff=1",
+             'correct': _STOCK_DIR +
+             "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=%s",
+             'cancel': _STOCK_DIR +
+             "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=%s",
+             'schedule': _ACC_DIR + "/stockClearingScheduleList.do",
+             'manege': _ACC_DIR + "/holdStockList.do"}
 
-    ENC = "cp932"
+    ENC = "utf-8"
     def _x(self, path):
         return "//table/tr/td/table" + path
 
@@ -264,6 +255,9 @@ class SBIcomm:
             br.set_proxies(self._proxy)
             br.add_proxy_password(self._proxy_user, self._proxy_password)
 
+        cj = cookielib.LWPCookieJar()
+        br.set_cookiejar(cj)
+        br.addheaders = [('User-agent', 'Chrome')]
         #br.set_debug_http(True)
         #br.set_debug_redirects(True)
         #br.set_debug_responses(True)
@@ -277,7 +271,6 @@ class SBIcomm:
         """
         br = self._browser_open()
         br.open(self.pages['top'])
-        _set_encode(br, self.ENC)
         br.select_form(name="form1")
         br["username"] = self._username
         br["password"] = self._password
@@ -293,19 +286,19 @@ class SBIcomm:
         """
         br = self._browser_open()
         res = br.open(self.pages['search'])
-        _set_encode(br, self.ENC)
         br.select_form(nr=0)
         br["ipm_product_code"] = str(code)
         res = br.submit()
         # 取得したhtmlを解析して日付と価格を求める
         doc = html.fromstring(res.read().decode(self.ENC))
         try:
-            end_price = float(doc.xpath(self._x("/tr[2]/td/font"))[0].text.replace(",", ""))
-            path_list = doc.xpath(self._x("/tr[@valign='top']/td[@nowrap][@align='right']"))
+            end_price = float(doc.xpath(self._x("/tr[2]/td/font/font"))[0].text.replace(",", ""))
+            path_list = doc.xpath(self._x("/tr[@valign='top']/td[@nowrap][@align='right']/font"))
             start_price = float(_NUM_PAT.findall(path_list[1].text.replace(",",""))[0])
+            max_price = float(_NUM_PAT.findall(path_list[2].text.replace(",",""))[0])
+            min_price = float(_NUM_PAT.findall(path_list[4].text.replace(",",""))[0])
+            path_list = doc.xpath(self._x("/tr[@valign='top']/td[@nowrap][@align='right']"))
             volume = int(_NUM_PAT.findall(path_list[2].text.replace(",",""))[0])
-            max_price = float(_NUM_PAT.findall(path_list[3].text.replace(",",""))[0])
-            min_price = float(_NUM_PAT.findall(path_list[5].text.replace(",",""))[0])
             # 日付の取得
             path_list = doc.xpath(self._x("/tr[2]/td[2]"))[0]
             num_list = _DATE_PAT.findall(path_list.text_content())
@@ -344,7 +337,6 @@ class SBIcomm:
         else:
             br = self.submit_user_and_pass()
         br.open(self.pages[kind])
-        _set_encode(br, self.ENC)
         br.select_form(nr=0)
         br["data_type"] = [index_name]
         req = br.click(type="submit", nr=0)
@@ -398,7 +390,6 @@ class SBIcomm:
         urls = []
         for page in range(5):
             br.open(self.pages['news'] % page)
-            _set_encode(br, self.ENC)
             for link in br.links(url_regex='newsDetail'):
                 urls.append(BASE_URL + link.url)
         br.close()
@@ -568,21 +559,23 @@ class SBIcomm:
         """
         req = br.click(type="submit", nr=1)
         res = br.open(req)
-        _set_encode(br, self.ENC)
         br.select_form(nr=0)
         try:
             req = br.click(type="submit", nr=0)
             print "Submitting Order..."
-            time.sleep(SLEEP_TIME)
-            res = br.open(req)
         except:
             raise RuntimeError, "Cannot Order!"
-        try:
-            doc = html.fromstring(res.read().decode(self.ENC))
-            path_list = doc.xpath("//input")
-            return path_list[0].attrib['value']
-        except:
-            raise ValueError, "Cannot Get Order Code!"
+
+        for _ in range(5):
+            try:
+                time.sleep(0.5)
+                res = br.open(req)
+                doc = html.fromstring(res.read().decode(self.ENC))
+                path_list = doc.xpath("//input")
+                return path_list[0].attrib['value']
+            except:
+                pass
+        raise ValueError, "Cannot Get Order Code!"
 
     def _init_open(self, page):
         """
@@ -590,7 +583,6 @@ class SBIcomm:
         """
         br = self.submit_user_and_pass()
         res = br.open(page)
-        _set_encode(br, self.ENC)
         return br
 
     def _get_parser(self, page):
@@ -601,4 +593,11 @@ class SBIcomm:
         res = br.open(page)
         return html.fromstring(res.read().decode(self.ENC))
 
-    
+
+if __name__ == "__main__":
+    import getpass
+    username = raw_input("username: ")
+    password = getpass.getpass("password: ")
+    sbi = SBIcomm(username, password)
+    print sbi.get_value("6758")
+    sbi.buy_order("6752", 100, 614, inv=True, trigger_price=612)  # 買い注文
