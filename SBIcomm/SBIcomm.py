@@ -571,7 +571,7 @@ class SBIcomm:
                 time.sleep(0.5)
                 res = br.open(req)
                 doc = html.fromstring(res.read().decode(self.ENC))
-                path_list = doc.xpath("//input")
+                path_list = doc.xpath("//input[@name='orderNum']")
                 return path_list[0].attrib['value']
             except:
                 pass
