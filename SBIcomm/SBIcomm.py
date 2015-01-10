@@ -559,6 +559,12 @@ class SBIcomm:
         """
         req = br.click(type="submit", nr=1)
         res = br.open(req)
+        try:
+            doc = html.fromstring(res.read().decode(self.ENC))
+            path_list = doc.xpath(self._x("/tr/td/font"))
+            error_msg = path_list[0].text
+        except:
+            pass
         br.select_form(nr=0)
         try:
             req = br.click(type="submit", nr=0)
@@ -574,8 +580,8 @@ class SBIcomm:
                 path_list = doc.xpath("//input[@name='orderNum']")
                 return path_list[0].attrib['value']
             except:
-                pass
-        raise ValueError, "Cannot Get Order Code!"
+                error_msg = u"処理がタイムアウトしました。"
+        raise ValueError, error_msg
 
     def _init_open(self, page):
         """
