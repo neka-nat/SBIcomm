@@ -6,6 +6,7 @@ import datetime
 import traceback
 from dateutil.relativedelta import *
 import mechanize
+import urllib
 import cookielib
 from lxml import html
 
@@ -198,22 +199,16 @@ class SBIcomm:
     pages = {'top': _BASE_URL + "/bsite/visitor/top.do",
              'search': _BASE_URL + "/bsite/price/search.do",
              'market': _BASE_URL + "/bsite/market/indexDetail.do",
-             'info': _BASE_URL + "/bsite/market/marketInfoDetail.do?id=%02d",
-             'news': _BASE_URL + "/bsite/market/newsList.do?page=%d",
+             'info': _BASE_URL + "/bsite/market/marketInfoDetail.do",
+             'news': _BASE_URL + "/bsite/market/newsList.do",
              'foreign': _BASE_URL + "/bsite/market/foreignIndexDetail.do",
              'curr': _BASE_URL + "/bsite/market/forexDetail.do",
-             'buy': _STOCK_DIR +
-             "/buyOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
-             'sell': _STOCK_DIR +
-             "/sellOrderEntry.do?ipm_product_code=%s&market=TKY&cayen.isStopOrder=%s",
-             'credit': _BASE_URL +
-             "/bsite/price/marginDetail.do?ipm_product_code=%s&market=TKY",
-             'list': _STOCK_DIR +
-             "/orderList.do?cayen.comboOff=1",
-             'correct': _STOCK_DIR +
-             "/orderCorrectEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_no=%s",
-             'cancel': _STOCK_DIR +
-             "/orderCancelEntry.do?sec_id=S&page=0&torihiki_kbn=1&REQUEST_TYPE=3&cayen.prevPage=cayen.orderList&cayen.comboOff=1&order_num=%s",
+             'buy': _STOCK_DIR + "/buyOrderEntry.do",
+             'sell': _STOCK_DIR + "/sellOrderEntry.do",
+             'credit': _BASE_URL + "/bsite/price/marginDetail.do",
+             'list': _STOCK_DIR + "/orderList.do",
+             'correct': _STOCK_DIR + "/orderCorrectEntry.do",
+             'cancel': _STOCK_DIR + "/orderCancelEntry.do",
              'schedule': _ACC_DIR + "/stockClearingScheduleList.do",
              'manege': _ACC_DIR + "/holdStockList.do"}
 
@@ -221,21 +216,19 @@ class SBIcomm:
     def _x(self, path):
         return "//table/tr/td/table" + path
 
+    def _add_url_param(self, url, params):
+        return url + '?' + urllib.urlencode(params)
+    
     def __init__(self, username, password,
                  proxy=None, proxy_user=None, proxy_password=None):
         """
         コンストラクタ
 
-        :param username: SBI証券でのユーザ名
-        :type username: str
-        :param password: パスワード
-        :type password: str
-        :param proxy: プロキシ
-        :type proxy: str
-        :param proxy_user: プロキシのユーザ名
-        :type proxy_user: str
-        :param proxy_password: プロキシのパスワード
-        :type proxy_password: str
+        :param str username: SBI証券でのユーザ名
+        :param str password: パスワード
+        :param str proxy: プロキシ
+        :param str proxy_user: プロキシのユーザ名
+        :param str proxy_password: プロキシのパスワード
         """
         self._username = username
         self._password = password
@@ -281,8 +274,7 @@ class SBIcomm:
         """
         現在の日付、株価を返す
 
-        :param code: 企業コード
-        :type code: str
+        :param str code: 企業コード
         """
         br = self._browser_open()
         res = br.open(self.pages['search'])
@@ -321,8 +313,7 @@ class SBIcomm:
         """
         市場の指標を返す
 
-        :param index_name: 市場の指標の種類
-        :type index_name: str
+        :param str index_name: 市場の指標の種類
         """
         # index_nameがどのページから見られるかを探す
         if index_name in JP_IDX.__dict__.keys():
@@ -378,7 +369,7 @@ class SBIcomm:
         """
         市場情報を取得する
         """
-        doc = self._get_parser(self.pages['info'] % info_no)
+        doc = self._get_parser(self._add_url_param(self.pages['info'], {"id": TODAY_MARKET}))
         path_list = doc.xpath(self._x("/tr/td/table[@border='0']/tr[@valign='top']/td"))
         return "\n".join([path_list[1].text, path_list[3].text_content()])
 
@@ -389,7 +380,7 @@ class SBIcomm:
         br = self.submit_user_and_pass()
         urls = []
         for page in range(5):
-            br.open(self.pages['news'] % page)
+            br.open(self._add_url_param(self.pages['news'], {"page": page}))
             for link in br.links(url_regex='newsDetail'):
                 urls.append(BASE_URL + link.url)
         br.close()
@@ -409,7 +400,8 @@ class SBIcomm:
         """
         企業の信用情報を取得する
         """
-        doc = self._get_parser(self.pages['credit'] % code)
+        doc = self._get_parser(self._add_url_param(self.pages['credit'],
+                                                   {"ipm_product_code": code, "market": "TKY"}))
         path_list = doc.xpath("//table/tr/td/table[@border='0'][@cellspacing='0'][@cellpadding='0']")
         records = {}
         try:
@@ -448,7 +440,10 @@ class SBIcomm:
         """
         買注文を行う
         """
-        br = self._init_open(self.pages['buy'] % (code, str(inv).lower()))
+        br = self._init_open(self._add_url_param(self.pages['buy'],
+                                                 {"ipm_product_code": code,
+                                                  "market": "TKY",
+                                                  "cayen.isStopOrder": str(inv).lower()}))
         br.select_form(nr=0)
         self._set_order_propaty(br, quantity, price, limit, order)
         if inv == True:
@@ -464,7 +459,10 @@ class SBIcomm:
         """
         売注文を行う
         """
-        br = self._init_open(self.pages['sell'] % (code, str(inv).lower()))
+        br = self._init_open(self._add_url_param(self.pages['sell'],
+                                                 {"ipm_product_code": code,
+                                                  "market": "TKY",
+                                                  "cayen.isStopOrder": str(inv).lower()}))
         br.select_form(nr=0)
         self._set_order_propaty(br, quantity, price, limit, order)
         if inv == True:
@@ -477,7 +475,7 @@ class SBIcomm:
         """
         オーダーのリストを取得する
         """
-        doc = self._get_parser(self.pages['list'])
+        doc = self._get_parser(self._add_url_param(self.pages['list'], {"cayen.comboOff": 1}))
         path_list = doc.xpath("//td[@width='20%'][@align='center']")
         mlist = [re.search("\d{6}", l.xpath("descendant::a")[0].attrib['href']) for l in path_list]
         return [m.group(0) for m in mlist]
@@ -486,7 +484,10 @@ class SBIcomm:
         """
         オーダーの情報を取得する
         """
-        doc = self._get_parser(self.pages['correct'] % order_num)
+        doc = self._get_parser(self._add_url_param(self.pages['correct'],
+                                                   {"sec_id": "S", "page": 0, "torihiki_kbn": 1,
+                                                    "REQUEST_TYPE": 3, "cayen.prevPage": "cayen.orderList",
+                                                    "cayen.comboOff": 1, "order_no": order_num}))
         try:
             path_list = doc.xpath("//form[@action='/bsite/member/stock/orderCorrectEntry.do'][@method='POST']")
             code = _extract_num(path_list[0].xpath("descendant::td/b")[0].text)
@@ -530,7 +531,10 @@ class SBIcomm:
         """
         注文のキャンセル
         """
-        br = self._init_open(self.pages['cancel'] % order_num)
+        br = self._init_open(self._add_url_param(self.pages['cancel'],
+                                                 {"sec_id": "S", "page": 0, "torihiki_kbn": 1,
+                                                  "REQUEST_TYPE": 3, "cayen.prevPage": "cayen.orderList",
+                                                  "cayen.comboOff": 1, "order_num": order_num}))
         br.select_form(nr=0)
         br["password"] = self._password
         br.submit()
